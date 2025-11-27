@@ -1,0 +1,56 @@
+[project]
+name = "pytempo"
+version = "0.1.0"
+description = "Web3.py extension for Tempo blockchain - adds support for AA transactions and Tempo-specific features"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "web3>=7.0.0",
+    "eth-account>=0.11.0",
+    "eth-utils>=4.0.0",
+    "rlp>=4.0.0",
+]
+authors = [
+    {name = "Tempo"}
+]
+license = {text = "MIT OR Apache-2.0"}
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
+]
+
+[project.urls]
+Homepage = "https://github.com/tempoxyz/pytempo"
+Documentation = "https://github.com/tempoxyz/pytempo#readme"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 88
+target-version = "py39"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.2",
+    "ruff>=0.14.6",
+]
