@@ -1,5 +1,8 @@
 # pytempo
 
+>[!IMPORTANT]
+> This is a **proof-of-concept**, please reach out to the Tempo team if you are interested in using this library in production.
+
 Web3.py extension for Tempo.
 
 ## Installation
