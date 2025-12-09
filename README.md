@@ -1,6 +1,21 @@
+<br>
+<br>
+
+<p align="center">
+  <a href="https://tempo.xyz">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/tempoxyz/.github/refs/heads/main/assets/combomark-dark.svg">
+      <img alt="tempo combomark" src="https://raw.githubusercontent.com/tempoxyz/.github/refs/heads/main/assets/combomark-bright.svg" width="auto" height="120">
+    </picture>
+  </a>
+</p>
+
+<br>
+<br>
+
 # pytempo
 
->[!IMPORTANT]
+> [!IMPORTANT]
 > This is a **proof-of-concept**, please reach out to the Tempo team if you are interested in using this library in production.
 
 Web3.py extension for Tempo.
@@ -12,6 +27,7 @@ pip install -e .
 ```
 
 Or with uv:
+
 ```bash
 uv add .
 ```
@@ -160,6 +176,7 @@ Monkey patches web3.py to recognize Tempo AA transactions. **Must be called befo
 Creates a Tempo AA transaction.
 
 **Parameters:**
+
 - `to` (str): Destination address
 - `value` (int): Value in wei (default: 0)
 - `gas` (int): Gas limit
@@ -181,6 +198,7 @@ Creates a Tempo AA transaction.
 Main transaction class.
 
 **Methods:**
+
 - `sign(private_key, for_fee_payer=False)` - Sign the transaction
 - `encode()` - Encode to bytes for transmission
 - `hash()` - Get transaction hash
@@ -190,15 +208,24 @@ Main transaction class.
 ## Examples
 
 See the `examples/` directory:
+
 - `simple_send.py` - Simple value transfer
 - `basic_transaction.py` - Transaction with fee token
 - `fee_payer_sponsored.py` - Gas sponsorship and call batching
 
+## Contributing
+
+Our contributor guidelines can be found in [`CONTRIBUTING.md`](https://github.com/tempoxyz/tempo?tab=contributing-ov-file).
+
+## Security
+
+See [`SECURITY.md`](https://github.com/tempoxyz/pytempo?tab=security-ov-file). Note: Tempo is still undergoing audit and does not have an active bug bounty. Submissions will not be eligible for a bounty until audits have concluded.
+
 ## License
 
-Licensed under either of:
+Licensed under either of [Apache License](./LICENSE-APACHE), Version
+2.0 or [MIT License](./LICENSE-MIT) at your option.
 
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
-- MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
-
-at your option.
+Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in these crates by you, as defined in the Apache-2.0 license,
+shall be dual licensed as above, without any additional terms or conditions.
