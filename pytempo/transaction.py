@@ -1,4 +1,4 @@
-"""Tempo AA Transaction (Type 0x76) implementation with RLP encoding and web3.py integration."""
+"""Tempo Transaction (Type 0x76) implementation with RLP encoding and web3.py integration."""
 
 from dataclasses import dataclass
 from typing import Optional
@@ -42,17 +42,18 @@ class AccessListItemRLP(rlp.Serializable):
     ]
 
 
-class TempoAATransaction:
+class TempoTransaction:
     """
-    Tempo AA Transaction (Type 0x76).
+    Tempo Transaction (Type 0x76).
 
     Features:
-    - Three signature types: secp256k1, P256, WebAuthn
+    - Four signature types: secp256k1, P256, WebAuthn, Keychain
     - 2D nonce system for parallel transactions
     - Gas sponsorship via fee payer
     - Call batching
     - Optional fee tokens
     - Transaction expiry windows
+    - Access keys with spending limits
     """
 
     TRANSACTION_TYPE = 0x76
@@ -149,9 +150,16 @@ class TempoAATransaction:
             "feePayerSignature", transaction_dict.get("fee_payer_signature")
         )
 
-        # AA authorization list (EIP-7702 style)
-        self.aa_authorization_list = transaction_dict.get(
-            "aaAuthorizationList", transaction_dict.get("aa_authorization_list", [])
+        # Tempo authorization list (EIP-7702 style delegation)
+        self.tempo_authorization_list = transaction_dict.get(
+            "tempoAuthorizationList",
+            transaction_dict.get(
+                "tempo_authorization_list",
+                transaction_dict.get(
+                    "aaAuthorizationList",
+                    transaction_dict.get("aa_authorization_list", []),
+                ),
+            ),
         )
 
         # Sender signature
@@ -195,7 +203,7 @@ class TempoAATransaction:
                 self.valid_after if self.valid_after is not None else b"",
                 self.fee_token if self.fee_token is not None else b"",
                 self.sender_address,
-                self.aa_authorization_list if self.aa_authorization_list else [],
+                self.tempo_authorization_list if self.tempo_authorization_list else [],
             ]
 
             encoded = rlp.encode(fields)
@@ -220,7 +228,7 @@ class TempoAATransaction:
                 if has_fee_payer
                 else (self.fee_token if self.fee_token is not None else b""),
                 bytes([0x00]) if has_fee_payer else b"",
-                self.aa_authorization_list if self.aa_authorization_list else [],
+                self.tempo_authorization_list if self.tempo_authorization_list else [],
             ]
 
             encoded = rlp.encode(fields)
@@ -257,7 +265,7 @@ class TempoAATransaction:
             self.valid_after if self.valid_after is not None else b"",
             self.fee_token if self.fee_token is not None else b"",
             self.fee_payer_signature if self.fee_payer_signature is not None else b"",
-            self.aa_authorization_list if self.aa_authorization_list else [],
+            self.tempo_authorization_list if self.tempo_authorization_list else [],
             sender_sig,
         ]
 
@@ -311,6 +319,10 @@ class TempoAATransaction:
         return self
 
 
+# Alias for backwards compatibility
+TempoAATransaction = TempoTransaction
+
+
 def create_tempo_transaction(
     to: str,
     value: int = 0,
@@ -324,9 +336,9 @@ def create_tempo_transaction(
     fee_token: Optional[str] = None,
     calls: Optional[list[dict]] = None,
     **kwargs,
-) -> TempoAATransaction:
+) -> TempoTransaction:
     """
-    Create a Tempo AA transaction.
+    Create a Tempo transaction.
 
     Args:
         to: Destination address
@@ -343,7 +355,7 @@ def create_tempo_transaction(
         **kwargs: Additional optional fields
 
     Returns:
-        TempoAATransaction ready to sign
+        TempoTransaction ready to sign
     """
     tx_dict = {
         "to": to,
@@ -365,11 +377,15 @@ def create_tempo_transaction(
 
     tx_dict.update(kwargs)
 
-    return TempoAATransaction(tx_dict)
+    return TempoTransaction(tx_dict)
+
+
+# Backwards compatibility alias
+TempoAATransaction = TempoTransaction
 
 
 def patch_web3_for_tempo():
-    """Monkey patch web3.py to support Tempo AA transactions (type 0x76)."""
+    """Monkey patch web3.py to support Tempo transactions (type 0x76)."""
     from eth_account._utils.transaction_utils import set_transaction_type_if_needed
     from eth_account._utils.validation import is_int_or_prefixed_hexstr
     from eth_account.typed_transactions.typed_transaction import TypedTransaction
@@ -388,7 +404,7 @@ def patch_web3_for_tempo():
         transaction_type = pipe(dictionary["type"], hexstr_if_str(to_int))
 
         if transaction_type == 0x76:
-            return TempoAATransaction(dictionary)
+            return TempoTransaction(dictionary)
 
         return original_from_dict(cls, dictionary, blobs)
 

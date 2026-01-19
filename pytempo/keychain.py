@@ -53,31 +53,6 @@ def encode_get_remaining_limit_calldata(
     return f"{GET_REMAINING_LIMIT_SELECTOR}{account_padded}{key_padded}{token_padded}"
 
 
-def format_spending_limit(limit: int, decimals: int = 6) -> str:
-    """Format a spending limit for display.
-
-    Args:
-        limit: Raw spending limit in base units
-        decimals: Token decimals (default 6 for USDC-style tokens)
-
-    Returns:
-        Formatted string like "$1.00" or "∞" for unlimited
-    """
-    # Unlimited is represented as max uint256 or very large values
-    if limit >= 2**255:
-        return "∞"
-    if limit == 0:
-        return "$0"
-
-    amount = limit / (10**decimals)
-    if amount >= 1:
-        return f"${amount:.2f}"
-    elif amount >= 0.01:
-        return f"${amount:.2f}"
-    else:
-        return f"${amount:.4f}"
-
-
 def get_remaining_spending_limit(
     w3,
     account_address: str,
@@ -156,7 +131,7 @@ def sign_tx_access_key(tx, access_key_private_key: str, root_account: str):
     - Clears tx.v, tx.r, tx.s
 
     Args:
-        tx: TempoAATransaction to sign
+        tx: TempoTransaction to sign
         access_key_private_key: Private key of the access key (hex string with 0x prefix)
         root_account: Address of the root account (hex string with 0x prefix)
 
