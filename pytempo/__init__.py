@@ -11,19 +11,21 @@ from .transaction import (
     patch_web3_for_tempo,
 )
 
-from .access_keys import (
-    KEYCHAIN_SIGNATURE_TYPE,
-    KEYCHAIN_SIGNATURE_LENGTH,
-    build_keychain_signature,
-    sign_tx_access_key,
-)
-
-from .precompiles import (
+from .keychain import (
+    # Precompile address and selectors
     ACCOUNT_KEYCHAIN_ADDRESS,
     GET_REMAINING_LIMIT_SELECTOR,
+    # Precompile queries
     encode_get_remaining_limit_calldata,
     get_remaining_spending_limit,
     format_spending_limit,
+    # Signature constants
+    KEYCHAIN_SIGNATURE_TYPE,
+    KEYCHAIN_SIGNATURE_LENGTH,
+    INNER_SIGNATURE_LENGTH,
+    # Signing functions
+    build_keychain_signature,
+    sign_tx_access_key,
 )
 
 __version__ = "0.2.0"
@@ -33,15 +35,16 @@ __all__ = [
     "TempoAATransaction",
     "create_tempo_transaction",
     "patch_web3_for_tempo",
-    # Access keys
-    "KEYCHAIN_SIGNATURE_TYPE",
-    "KEYCHAIN_SIGNATURE_LENGTH",
-    "build_keychain_signature",
-    "sign_tx_access_key",
-    # Precompiles
+    # Keychain precompile
     "ACCOUNT_KEYCHAIN_ADDRESS",
     "GET_REMAINING_LIMIT_SELECTOR",
     "encode_get_remaining_limit_calldata",
     "get_remaining_spending_limit",
     "format_spending_limit",
+    # Keychain signing
+    "KEYCHAIN_SIGNATURE_TYPE",
+    "KEYCHAIN_SIGNATURE_LENGTH",
+    "INNER_SIGNATURE_LENGTH",
+    "build_keychain_signature",
+    "sign_tx_access_key",
 ]
