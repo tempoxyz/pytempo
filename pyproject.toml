@@ -1,6 +1,6 @@
 [project]
 name = "pytempo"
-version = "0.1.0"
+version = "0.1.1"
 description = "Web3.py extension for Tempo blockchain - adds support for AA transactions and Tempo-specific features"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -9,6 +9,7 @@ dependencies = [
     "eth-account>=0.11.0",
     "eth-utils>=4.0.0",
     "rlp>=4.0.0",
+    "attrs>=23.0.0",
 ]
 authors = [
     {name = "Tempo"}

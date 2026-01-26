@@ -1523,9 +1523,10 @@ wheels = [
 
 [[package]]
 name = "pytempo"
-version = "0.1.0"
+version = "0.1.1"
 source = { editable = "." }
 dependencies = [
+    { name = "attrs" },
     { name = "eth-account" },
     { name = "eth-utils" },
     { name = "rlp" },
@@ -1541,6 +1542,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "attrs", specifier = ">=23.0.0" },
     { name = "eth-account", specifier = ">=0.11.0" },
     { name = "eth-utils", specifier = ">=4.0.0" },
     { name = "rlp", specifier = ">=4.0.0" },

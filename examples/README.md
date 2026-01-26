@@ -7,20 +7,38 @@ This directory contains working examples of using the pytempo library.
 All examples require the `PRIVATE_KEY` environment variable:
 
 ```bash
-PRIVATE_KEY=0x... python examples/simple_send.py
+PRIVATE_KEY=0x... python examples/typed_simple_send.py
 ```
 
-## Available Examples
+## Typed API (Recommended)
 
-### 1. `simple_send.py` - Simple Transaction
+### `typed_simple_send.py` - Simple Transaction
 
-The simplest possible Tempo AA transaction. Sends a transaction with a custom fee token.
+The simplest possible Tempo AA transaction using the typed API.
+
+```bash
+PRIVATE_KEY=0xYourPrivateKeyHere python examples/typed_simple_send.py
+```
+
+### `typed_batch_calls.py` - Batch Multiple Calls
+
+Demonstrates batching multiple calls into a single transaction using chainable methods.
+
+```bash
+PRIVATE_KEY=0xYourPrivateKeyHere python examples/typed_batch_calls.py
+```
+
+## Legacy API
+
+### `simple_send.py` - Simple Transaction (Legacy)
+
+The simplest possible Tempo AA transaction using the legacy API.
 
 ```bash
 PRIVATE_KEY=0xYourPrivateKeyHere python examples/simple_send.py
 ```
 
-### 2. `basic_transaction.py` - Basic Transaction with Fee Token
+### `basic_transaction.py` - Basic Transaction with Fee Token (Legacy)
 
 Shows how to create a transaction with a custom fee token (pay gas in ERC-20).
 
@@ -28,7 +46,7 @@ Shows how to create a transaction with a custom fee token (pay gas in ERC-20).
 PRIVATE_KEY=0xYourPrivateKeyHere python examples/basic_transaction.py
 ```
 
-### 3. `batch_calls.py` - Batch Multiple Calls
+### `batch_calls.py` - Batch Multiple Calls (Legacy)
 
 Demonstrates batching multiple calls into a single transaction.
 

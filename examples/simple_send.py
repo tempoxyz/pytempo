@@ -17,7 +17,7 @@ from pytempo import create_tempo_transaction, patch_web3_for_tempo
 patch_web3_for_tempo()
 
 # Connect to Tempo
-w3 = Web3(Web3.HTTPProvider("https://eng:zealous-mayer@rpc.devnet.tempo.xyz"))
+w3 = Web3(Web3.HTTPProvider("https://rpc.testnet.tempo.xyz"))
 
 # Get private key from environment
 private_key = os.environ.get("PRIVATE_KEY")
