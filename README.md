@@ -34,6 +34,33 @@ uv add .
 
 ## Quick Start
 
+### Recommended: Typed Builder API
+
+```python
+from pytempo import TempoTransactionBuilder
+from web3 import Web3
+
+w3 = Web3(Web3.HTTPProvider("https://rpc.testnet.tempo.xyz"))
+
+# Build a strongly-typed transaction
+tx = (TempoTransactionBuilder(chain_id=42429)
+    .set_gas(100_000)
+    .set_max_fee_per_gas(2_000_000_000)
+    .set_max_priority_fee_per_gas(1_000_000_000)
+    .set_nonce(0)
+    .set_fee_token("0x20c0000000000000000000000000000000000001")
+    .add_call("0xRecipient...", value=1000)
+    .build())
+
+# Sign returns a new immutable transaction
+signed_tx = tx.sign("0xYourPrivateKey...")
+
+# Send using web3.py
+tx_hash = w3.eth.send_raw_transaction(signed_tx.encode())
+```
+
+### Legacy API (Backwards Compatible)
+
 ```python
 from pytempo import patch_web3_for_tempo, create_tempo_transaction
 from web3 import Web3
@@ -63,7 +90,46 @@ tx_hash = w3.eth.send_raw_transaction(tx.encode())
 receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
 ```
 
-## Usage
+## Typed API (v0.3.0+)
+
+The typed API provides immutable dataclasses with validation:
+
+```python
+from pytempo import TempoTransactionBuilder, Call, AccessListItem
+
+# Builder pattern with fluent API
+tx = (TempoTransactionBuilder(chain_id=42429)
+    .set_gas(100_000)
+    .set_max_fee_per_gas(2_000_000_000)
+    .add_call("0xRecipient...", value=1000, data="0xabcd")
+    .add_call("0xOther...", value=2000)  # Batch multiple calls
+    .set_fee_token("0x20c0000000000000000000000000000000000001")
+    .sponsored()  # Mark for fee payer
+    .build())  # Validates and returns immutable transaction
+
+# Immutable signing - returns new transaction
+signed = tx.sign("0xPrivateKey...")
+assert tx.sender_signature is None  # Original unchanged
+assert signed.sender_signature is not None
+```
+
+### Type Coercion Helpers
+
+```python
+from pytempo import as_address, as_hash32, as_bytes
+
+# Validate and convert addresses
+addr = as_address("0xF0109fC8DF283027b6285cc889F5aA624EaC1F55")  # -> bytes (20)
+addr = as_address(b"\x00" * 20)  # Also accepts bytes
+
+# Validate 32-byte hashes
+h = as_hash32("0x" + "ab" * 32)  # -> bytes (32)
+
+# Convert hex strings to bytes
+data = as_bytes("0xabcdef")  # -> b'\xab\xcd\xef'
+```
+
+## Legacy Usage
 
 ### Basic Transaction
 

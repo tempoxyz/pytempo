@@ -138,18 +138,14 @@ def sign_tx_access_key(tx, access_key_private_key: str, root_account: str):
     Returns:
         The transaction (for chaining)
     """
-    # CRITICAL: Set sender_address to root account BEFORE computing signing hash
     tx.sender_address = to_bytes(hexstr=root_account)
 
-    # Get the signing hash
     msg_hash = tx.get_signing_hash(for_fee_payer=False)
 
-    # Build and set the Keychain signature
     tx.signature = build_keychain_signature(
         msg_hash, access_key_private_key, root_account
     )
 
-    # Clear v/r/s since we're using raw signature bytes
     tx.v = None
     tx.r = None
     tx.s = None
