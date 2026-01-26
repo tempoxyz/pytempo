@@ -15,9 +15,13 @@ Strongly-Typed API (Recommended):
     )
     signed_tx = tx.sign("0xPrivateKey...")
 
+    # Send raw bytes - no patching needed
+    w3.eth.send_raw_transaction(signed_tx.encode())
+
 Legacy API (Backwards Compatible):
     from pytempo import create_tempo_transaction, patch_web3_for_tempo
 
+    # Patch required if using web3's internal transaction parsing
     patch_web3_for_tempo()
     tx = create_tempo_transaction(to="0x...", value=1000, chain_id=42429)
     tx.sign("0xPrivateKey...")

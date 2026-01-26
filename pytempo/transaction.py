@@ -2,12 +2,14 @@
 
 For new code, prefer using the strongly-typed immutable API:
 
-    from pytempo import TempoTransaction
+    from pytempo import TempoTransaction, Call
 
-    tx = (TempoTransaction.create(chain_id=42429)
-        .with_gas(100_000)
-        .add_call("0xRecipient...", value=1000)
-        .sign("0xPrivateKey..."))
+    tx = TempoTransaction.create(
+        chain_id=42429,
+        gas_limit=100_000,
+        calls=(Call.create(to="0xRecipient...", value=1000),),
+    )
+    signed_tx = tx.sign("0xPrivateKey...")
 """
 
 from typing import Optional
@@ -33,10 +35,12 @@ class LegacyTempoTransaction:
 
     For new code, prefer using the immutable TempoTransaction:
 
-        tx = (TempoTransaction.create(chain_id=42429)
-            .add_call("0xRecipient...", value=1000)
-            .with_gas(100_000)
-            .sign("0xPrivateKey..."))
+        tx = TempoTransaction.create(
+            chain_id=42429,
+            gas_limit=100_000,
+            calls=(Call.create(to="0xRecipient...", value=1000),),
+        )
+        signed_tx = tx.sign("0xPrivateKey...")
     """
 
     TRANSACTION_TYPE = 0x76

@@ -11,7 +11,7 @@ import os
 
 from web3 import Web3
 
-from pytempo import TempoTransaction
+from pytempo import Call, TempoTransaction
 
 # Connect to Tempo
 w3 = Web3(Web3.HTTPProvider("https://eng:zealous-mayer@rpc.devnet.tempo.xyz"))
@@ -23,22 +23,22 @@ if not private_key:
 
 account = w3.eth.account.from_key(private_key)
 
-# Create, configure, and sign transaction in one chain
-tx = (
-    TempoTransaction.create(chain_id=w3.eth.chain_id)
-    .with_gas(100_000)
-    .with_max_fee_per_gas(w3.eth.gas_price * 2 if w3.eth.gas_price else 2_000_000_000)
-    .with_max_priority_fee_per_gas(
-        w3.eth.gas_price if w3.eth.gas_price else 2_000_000_000
-    )
-    .with_nonce(w3.eth.get_transaction_count(account.address))
-    .with_fee_token("0x20c0000000000000000000000000000000000001")
-    .add_call("0xF0109fC8DF283027b6285cc889F5aA624EaC1F55", value=0)
-    .sign(private_key)
+# Create transaction with all parameters
+tx = TempoTransaction.create(
+    chain_id=w3.eth.chain_id,
+    gas_limit=100_000,
+    max_fee_per_gas=w3.eth.gas_price * 2 if w3.eth.gas_price else 2_000_000_000,
+    max_priority_fee_per_gas=w3.eth.gas_price if w3.eth.gas_price else 2_000_000_000,
+    nonce=w3.eth.get_transaction_count(account.address),
+    fee_token="0x20c0000000000000000000000000000000000001",
+    calls=(Call.create(to="0xF0109fC8DF283027b6285cc889F5aA624EaC1F55", value=0),),
 )
 
+# Sign transaction (returns new instance)
+signed_tx = tx.sign(private_key)
+
 # Send transaction
-tx_hash = w3.eth.send_raw_transaction(tx.encode())
+tx_hash = w3.eth.send_raw_transaction(signed_tx.encode())
 print(f"Transaction hash: {tx_hash.hex()}")
 
 # Wait for confirmation
