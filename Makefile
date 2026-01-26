@@ -1,10 +1,14 @@
-.PHONY: install lint format format-check test check all
+.PHONY: install lint format format-check test check all fix
 
 install:
 	uv sync --dev
 
 lint:
 	uv run ruff check .
+
+fix:
+	uv run ruff check --fix .
+	uv run ruff format .
 
 format:
 	uv run ruff format .

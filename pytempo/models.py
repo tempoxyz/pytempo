@@ -18,12 +18,16 @@ from .types import (
 )
 
 
-def _validate_call_value(instance: "Call", attribute: attrs.Attribute, value: int) -> None:
+def _validate_call_value(
+    instance: "Call", attribute: attrs.Attribute, value: int
+) -> None:
     if value < 0:
         raise ValueError("call.value must be >= 0")
 
 
-def _validate_call_to(instance: "Call", attribute: attrs.Attribute, value: Address) -> None:
+def _validate_call_to(
+    instance: "Call", attribute: attrs.Attribute, value: Address
+) -> None:
     if len(bytes(value)) not in (0, 20):
         raise ValueError("call.to must be 20 bytes (or empty for contract creation)")
 
@@ -65,8 +69,12 @@ def _convert_storage_keys(keys: tuple[BytesLike, ...]) -> tuple[Hash32, ...]:
 class AccessListItem:
     """Single entry in an EIP-2930 access list."""
 
-    address: Address = attrs.field(converter=as_address, validator=_validate_access_list_address)
-    storage_keys: tuple[Hash32, ...] = attrs.field(factory=tuple, converter=_convert_storage_keys)
+    address: Address = attrs.field(
+        converter=as_address, validator=_validate_access_list_address
+    )
+    storage_keys: tuple[Hash32, ...] = attrs.field(
+        factory=tuple, converter=_convert_storage_keys
+    )
 
     def as_rlp_list(self) -> list:
         return [bytes(self.address), [bytes(k) for k in self.storage_keys]]
@@ -106,7 +114,9 @@ def _convert_calls(calls: tuple[Call, ...]) -> tuple[Call, ...]:
     return tuple(calls)
 
 
-def _convert_access_list(items: tuple[AccessListItem, ...]) -> tuple[AccessListItem, ...]:
+def _convert_access_list(
+    items: tuple[AccessListItem, ...],
+) -> tuple[AccessListItem, ...]:
     return tuple(items)
 
 
@@ -159,9 +169,13 @@ class TempoTransaction:
     valid_before: Optional[int] = None
     valid_after: Optional[int] = None
 
-    fee_token: Optional[Address] = attrs.field(default=None, converter=as_optional_address)
+    fee_token: Optional[Address] = attrs.field(
+        default=None, converter=as_optional_address
+    )
 
-    sender_address: Optional[Address] = attrs.field(default=None, converter=as_optional_address)
+    sender_address: Optional[Address] = attrs.field(
+        default=None, converter=as_optional_address
+    )
     awaiting_fee_payer: bool = False
 
     fee_payer_signature: Optional[Signature] = None
