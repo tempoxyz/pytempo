@@ -65,9 +65,8 @@ class TestCall:
         assert call.data == bytes.fromhex("abcd")
 
     def test_call_validate_negative_value(self):
-        call = Call(to=as_address("0x" + "a" * 40), value=-1, data=b"")
         with pytest.raises(ValueError, match="value must be >= 0"):
-            call.validate()
+            Call(to=as_address("0x" + "a" * 40), value=-1, data=b"")
 
     def test_call_as_rlp_list(self):
         call = Call.create(to="0x" + "a" * 40, value=100, data="0x1234")
@@ -305,13 +304,13 @@ class TestTempoTransaction:
         assert tx.calls[0].value == 500
 
     def test_immutability_preserved(self):
-        from dataclasses import replace
+        import attrs
 
         tx1 = TempoTransaction.create(
             chain_id=42429,
             calls=(Call.create(to="0x" + "a" * 40),),
         )
-        tx2 = replace(tx1, gas_limit=200000)
+        tx2 = attrs.evolve(tx1, gas_limit=200000)
 
         assert tx1.gas_limit == 21000
         assert tx2.gas_limit == 200000

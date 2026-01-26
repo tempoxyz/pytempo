@@ -1,4 +1,7 @@
-"""Type definitions and coercion helpers for Tempo transactions."""
+"""Type definitions and coercion helpers for Tempo transactions.
+
+These converters are designed to work with attrs.field(converter=...).
+"""
 
 from typing import NewType, Optional, Union
 
@@ -11,7 +14,10 @@ BytesLike = Union[bytes, str]
 
 
 def as_bytes(value: BytesLike) -> bytes:
-    """Convert hex string, bytes, bytearray, or memoryview to bytes."""
+    """Convert hex string, bytes, bytearray, or memoryview to bytes.
+
+    Use as: attrs.field(converter=as_bytes)
+    """
     if isinstance(value, str):
         if value == "" or value == "0x":
             return b""
@@ -20,7 +26,10 @@ def as_bytes(value: BytesLike) -> bytes:
 
 
 def as_address(value: BytesLike) -> Address:
-    """Convert hex string or bytes to a validated 20-byte address."""
+    """Convert hex string or bytes to a validated 20-byte address.
+
+    Use as: attrs.field(converter=as_address)
+    """
     if isinstance(value, str):
         if value == "" or value == "0x":
             return Address(b"")
@@ -34,7 +43,10 @@ def as_address(value: BytesLike) -> Address:
 
 
 def as_optional_address(value: Optional[BytesLike]) -> Optional[Address]:
-    """Convert to Address, treating empty/None as None."""
+    """Convert to Address, treating empty/None as None.
+
+    Use as: attrs.field(converter=as_optional_address)
+    """
     if value is None:
         return None
     b = as_bytes(value)
@@ -44,7 +56,10 @@ def as_optional_address(value: Optional[BytesLike]) -> Optional[Address]:
 
 
 def as_hash32(value: BytesLike) -> Hash32:
-    """Convert hex string or bytes to a validated 32-byte hash."""
+    """Convert hex string or bytes to a validated 32-byte hash.
+
+    Use as: attrs.field(converter=as_hash32)
+    """
     if isinstance(value, str):
         b = to_bytes(hexstr=value)
     else:
