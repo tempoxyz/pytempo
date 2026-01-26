@@ -7,7 +7,15 @@ import rlp
 from eth_account import Account
 from eth_utils import keccak
 
-from .types import Address, BytesLike, Hash32, as_address, as_bytes, as_hash32
+from .types import (
+    Address,
+    BytesLike,
+    Hash32,
+    as_address,
+    as_bytes,
+    as_hash32,
+    as_optional_address,
+)
 
 
 @dataclass(frozen=True)
@@ -21,6 +29,10 @@ class Call:
     def validate(self) -> None:
         if self.value < 0:
             raise ValueError("call.value must be >= 0")
+        if len(bytes(self.to)) not in (0, 20):
+            raise ValueError(
+                "call.to must be 20 bytes (or empty for contract creation)"
+            )
 
     def as_rlp_list(self) -> list:
         return [bytes(self.to), self.value, self.data]
@@ -194,7 +206,7 @@ class TempoTransaction:
             nonce_key=nonce_key,
             valid_before=valid_before,
             valid_after=valid_after,
-            fee_token=as_address(fee_token) if fee_token else None,
+            fee_token=as_optional_address(fee_token),
             awaiting_fee_payer=awaiting_fee_payer,
             calls=tuple(calls),
             access_list=tuple(access_list),
@@ -252,8 +264,7 @@ class TempoTransaction:
             for item in access_list_data
         )
 
-        fee_token_raw = get_key("feeToken", "fee_token")
-        fee_token = as_address(fee_token_raw) if fee_token_raw else None
+        fee_token = as_optional_address(get_key("feeToken", "fee_token"))
 
         tempo_auth = get_key(
             "tempoAuthorizationList",

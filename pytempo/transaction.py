@@ -17,7 +17,7 @@ from eth_utils import to_bytes
 
 from .models import AccessListItem, Call, Signature
 from .models import TempoTransaction as TypedTempoTransaction
-from .types import Address, as_address
+from .types import Address, as_address, as_optional_address
 
 __all__ = [
     "LegacyTempoTransaction",
@@ -131,10 +131,9 @@ class LegacyTempoTransaction:
         self.valid_before = get_key(transaction_dict, "validBefore", "valid_before")
         self.valid_after = get_key(transaction_dict, "validAfter", "valid_after")
 
-        fee_token_raw = get_key(transaction_dict, "feeToken", "fee_token")
-        self.fee_token: Optional[Address] = None
-        if fee_token_raw:
-            self.fee_token = as_address(fee_token_raw)
+        self.fee_token: Optional[Address] = as_optional_address(
+            get_key(transaction_dict, "feeToken", "fee_token")
+        )
 
         self.fee_payer_signature = get_key(
             transaction_dict, "feePayerSignature", "fee_payer_signature"
@@ -354,6 +353,9 @@ def patch_web3_for_tempo():
     from eth_utils.curried import hexstr_if_str, to_int
     from eth_utils.toolz import pipe
 
+    if getattr(TypedTransaction.from_dict, "_pytempo_patched", False):
+        return
+
     original_from_dict = TypedTransaction.from_dict.__func__
 
     @classmethod
@@ -370,4 +372,5 @@ def patch_web3_for_tempo():
 
         return original_from_dict(cls, dictionary, blobs)
 
+    patched_from_dict._pytempo_patched = True
     TypedTransaction.from_dict = patched_from_dict

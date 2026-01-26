@@ -51,6 +51,7 @@ from .types import (
     as_address,
     as_bytes,
     as_hash32,
+    as_optional_address,
 )
 
 __version__ = "0.3.0"
@@ -63,6 +64,7 @@ __all__ = [
     "as_address",
     "as_bytes",
     "as_hash32",
+    "as_optional_address",
     # Models (strongly-typed API)
     "Call",
     "AccessListItem",
