@@ -89,19 +89,57 @@ class AccessListItem:
         return cls(address=address, storage_keys=storage_keys)
 
 
+SECP256K1_N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
+SECP256K1_HALF_N = SECP256K1_N // 2
+
+
+def _validate_signature_r(
+    instance: "Signature", attribute: attrs.Attribute, value: int
+) -> None:
+    if not (0 < value < SECP256K1_N):
+        raise ValueError(f"signature r must be in range (0, secp256k1_n), got {value}")
+
+
+def _validate_signature_s(
+    instance: "Signature", attribute: attrs.Attribute, value: int
+) -> None:
+    if not (0 < value <= SECP256K1_HALF_N):
+        raise ValueError(
+            f"signature s must be in range (0, secp256k1_n/2] (low-s), got {value}"
+        )
+
+
+def _validate_signature_v(
+    instance: "Signature", attribute: attrs.Attribute, value: int
+) -> None:
+    if value not in (0, 1, 27, 28):
+        raise ValueError(f"signature v must be 0, 1, 27, or 28, got {value}")
+
+
 @attrs.define(frozen=True)
 class Signature:
-    """65-byte secp256k1 signature (r || s || v)."""
+    """65-byte secp256k1 signature (r || s || v).
 
-    r: int
-    s: int
-    v: int
+    Validates:
+    - r is in range (0, secp256k1_n)
+    - s is in low-s canonical form: (0, secp256k1_n/2]
+    - v is 0, 1, 27, or 28
+    """
+
+    r: int = attrs.field(validator=_validate_signature_r)
+    s: int = attrs.field(validator=_validate_signature_s)
+    v: int = attrs.field(validator=_validate_signature_v)
 
     def to_bytes(self) -> bytes:
         return self.r.to_bytes(32, "big") + self.s.to_bytes(32, "big") + bytes([self.v])
 
     @classmethod
     def from_bytes(cls, sig_bytes: bytes) -> "Signature":
+        """Parse a 65-byte signature and validate r/s/v ranges.
+
+        Raises:
+            ValueError: If signature is not 65 bytes or values are out of range.
+        """
         if len(sig_bytes) != 65:
             raise ValueError(f"signature must be 65 bytes, got {len(sig_bytes)}")
         r = int.from_bytes(sig_bytes[:32], "big")
@@ -178,8 +216,8 @@ class TempoTransaction:
     )
     awaiting_fee_payer: bool = False
 
-    fee_payer_signature: Optional[Signature] = None
-    sender_signature: Optional[Signature] = None
+    fee_payer_signature: Optional[Signature | bytes] = None
+    sender_signature: Optional[Signature | bytes] = None
 
     tempo_authorization_list: tuple[bytes, ...] = attrs.field(
         factory=tuple, converter=_convert_tempo_auth_list
@@ -424,10 +462,15 @@ class TempoTransaction:
         """
         self.validate()
 
-        sender_sig = self.sender_signature.to_bytes() if self.sender_signature else b""
-        fee_payer_sig = (
-            self.fee_payer_signature.to_bytes() if self.fee_payer_signature else b""
-        )
+        def sig_to_bytes(sig: Optional[Signature | bytes]) -> bytes:
+            if sig is None:
+                return b""
+            if isinstance(sig, bytes):
+                return sig
+            return sig.to_bytes()
+
+        sender_sig = sig_to_bytes(self.sender_signature)
+        fee_payer_sig = sig_to_bytes(self.fee_payer_signature)
 
         fields = [
             self.chain_id,
@@ -453,8 +496,12 @@ class TempoTransaction:
         return keccak(self.encode())
 
     def vrs(self) -> tuple[Optional[int], Optional[int], Optional[int]]:
-        """Get v, r, s values for secp256k1 signatures."""
-        if self.sender_signature:
+        """Get v, r, s values for secp256k1 signatures.
+
+        Returns (None, None, None) if signature is not a Signature object
+        (e.g., for keychain signatures stored as raw bytes).
+        """
+        if isinstance(self.sender_signature, Signature):
             return (
                 self.sender_signature.v,
                 self.sender_signature.r,

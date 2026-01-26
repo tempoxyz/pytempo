@@ -50,6 +50,18 @@ class TestTypes:
         assert as_bytes("0x") == b""
         assert as_bytes("") == b""
 
+    def test_as_bytes_rejects_int(self):
+        with pytest.raises(TypeError, match="expected str, bytes"):
+            as_bytes(20)
+
+    def test_as_address_rejects_int(self):
+        with pytest.raises(TypeError, match="expected str, bytes"):
+            as_address(20)
+
+    def test_as_hash32_rejects_int(self):
+        with pytest.raises(TypeError, match="expected str, bytes"):
+            as_hash32(32)
+
 
 class TestCall:
     """Test Call dataclass."""
@@ -98,15 +110,36 @@ class TestSignature:
         assert sig_bytes[64] == 27
 
     def test_signature_from_bytes(self):
-        raw = b"\x00" * 32 + b"\x00" * 32 + b"\x1b"
+        r = 0x1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF
+        s = 0x1234567890ABCDEF1234567890ABCDEF  # Low-s value (under half of secp256k1 n)
+        v = 27
+        raw = r.to_bytes(32, "big") + s.to_bytes(32, "big") + bytes([v])
         sig = Signature.from_bytes(raw)
-        assert sig.r == 0
-        assert sig.s == 0
-        assert sig.v == 27
+        assert sig.r == r
+        assert sig.s == s
+        assert sig.v == v
 
     def test_signature_from_bytes_invalid_length(self):
         with pytest.raises(ValueError, match="65 bytes"):
             Signature.from_bytes(b"\x00" * 64)
+
+    def test_signature_rejects_zero_r(self):
+        with pytest.raises(ValueError, match="signature r must be in range"):
+            Signature(r=0, s=1, v=27)
+
+    def test_signature_rejects_zero_s(self):
+        with pytest.raises(ValueError, match="signature s must be in range"):
+            Signature(r=1, s=0, v=27)
+
+    def test_signature_rejects_high_s(self):
+        from pytempo.models import SECP256K1_HALF_N
+
+        with pytest.raises(ValueError, match="low-s"):
+            Signature(r=1, s=SECP256K1_HALF_N + 1, v=27)
+
+    def test_signature_rejects_invalid_v(self):
+        with pytest.raises(ValueError, match="v must be"):
+            Signature(r=1, s=1, v=99)
 
 
 class TestTempoTransaction:
