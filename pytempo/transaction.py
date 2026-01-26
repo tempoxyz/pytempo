@@ -19,7 +19,7 @@ from eth_utils import to_bytes
 
 from .models import AccessListItem, Call, Signature
 from .models import TempoTransaction as TypedTempoTransaction
-from .types import Address, as_address, as_optional_address
+from .types import Address, as_address, as_bytes, as_optional_address
 
 __all__ = [
     "LegacyTempoTransaction",
@@ -185,25 +185,43 @@ class LegacyTempoTransaction:
         if not self.calls:
             raise ValueError("at least one call is required")
 
+    def _parse_signature(self, sig) -> Optional[Signature | bytes]:
+        """Parse a signature from bytes, hex string, or Signature object.
+
+        Returns:
+            - Signature object for 65-byte secp256k1 signatures
+            - Raw bytes for other signature types (e.g., 86-byte keychain signatures)
+            - None if sig is None or empty
+        """
+        if sig is None:
+            return None
+        if isinstance(sig, Signature):
+            return sig
+        if isinstance(sig, str):
+            sig = as_bytes(sig)
+        if isinstance(sig, (bytes, bytearray, memoryview)):
+            sig = bytes(sig)
+            if len(sig) == 0:
+                return None
+            elif len(sig) == 65:
+                return Signature.from_bytes(sig)
+            else:
+                return sig
+        raise TypeError(
+            f"signature must be bytes, hex string, or Signature, got {type(sig).__name__}"
+        )
+
     def _to_typed(self) -> TypedTempoTransaction:
         """Convert to immutable typed transaction."""
         sender_sig = None
-        if (
-            self.signature
-            and isinstance(self.signature, bytes)
-            and len(self.signature) == 65
-        ):
-            sender_sig = Signature.from_bytes(self.signature)
+        if self.signature:
+            sender_sig = self._parse_signature(self.signature)
         elif self.v is not None and self.r is not None and self.s is not None:
             sender_sig = Signature(r=self.r, s=self.s, v=self.v)
 
         fee_payer_sig = None
-        if (
-            self.fee_payer_signature
-            and isinstance(self.fee_payer_signature, bytes)
-            and len(self.fee_payer_signature) == 65
-        ):
-            fee_payer_sig = Signature.from_bytes(self.fee_payer_signature)
+        if self.fee_payer_signature:
+            fee_payer_sig = self._parse_signature(self.fee_payer_signature)
 
         return TypedTempoTransaction(
             chain_id=self.chain_id,

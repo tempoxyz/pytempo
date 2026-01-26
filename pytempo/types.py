@@ -17,25 +17,40 @@ def as_bytes(value: BytesLike) -> bytes:
     """Convert hex string, bytes, bytearray, or memoryview to bytes.
 
     Use as: attrs.field(converter=as_bytes)
+
+    Raises:
+        TypeError: If value is not a string or bytes-like object (rejects int).
     """
     if isinstance(value, str):
         if value == "" or value == "0x":
             return b""
         return to_bytes(hexstr=value)
-    return bytes(value)
+    if isinstance(value, (bytes, bytearray, memoryview)):
+        return bytes(value)
+    raise TypeError(
+        f"expected str, bytes, bytearray, or memoryview, got {type(value).__name__}"
+    )
 
 
 def as_address(value: BytesLike) -> Address:
     """Convert hex string or bytes to a validated 20-byte address.
 
     Use as: attrs.field(converter=as_address)
+
+    Raises:
+        TypeError: If value is not a string or bytes-like object (rejects int).
+        ValueError: If address is not 0 or 20 bytes.
     """
     if isinstance(value, str):
         if value == "" or value == "0x":
             return Address(b"")
         b = to_bytes(hexstr=value)
-    else:
+    elif isinstance(value, (bytes, bytearray, memoryview)):
         b = bytes(value)
+    else:
+        raise TypeError(
+            f"expected str, bytes, bytearray, or memoryview, got {type(value).__name__}"
+        )
 
     if len(b) not in (0, 20):
         raise ValueError(f"address must be 20 bytes (or empty), got {len(b)}")
@@ -59,11 +74,19 @@ def as_hash32(value: BytesLike) -> Hash32:
     """Convert hex string or bytes to a validated 32-byte hash.
 
     Use as: attrs.field(converter=as_hash32)
+
+    Raises:
+        TypeError: If value is not a string or bytes-like object (rejects int).
+        ValueError: If hash is not exactly 32 bytes.
     """
     if isinstance(value, str):
         b = to_bytes(hexstr=value)
-    else:
+    elif isinstance(value, (bytes, bytearray, memoryview)):
         b = bytes(value)
+    else:
+        raise TypeError(
+            f"expected str, bytes, bytearray, or memoryview, got {type(value).__name__}"
+        )
 
     if len(b) != 32:
         raise ValueError(f"hash32 must be 32 bytes, got {len(b)}")
