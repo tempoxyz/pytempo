@@ -34,29 +34,26 @@ uv add .
 
 ## Quick Start
 
-### Recommended: Typed Builder API
+### Recommended: Typed API
 
 ```python
-from pytempo import TempoTransactionBuilder
+from pytempo import TempoTransaction
 from web3 import Web3
 
 w3 = Web3(Web3.HTTPProvider("https://rpc.testnet.tempo.xyz"))
 
-# Build a strongly-typed transaction
-tx = (TempoTransactionBuilder(chain_id=42429)
-    .set_gas(100_000)
-    .set_max_fee_per_gas(2_000_000_000)
-    .set_max_priority_fee_per_gas(1_000_000_000)
-    .set_nonce(0)
-    .set_fee_token("0x20c0000000000000000000000000000000000001")
+# Create a strongly-typed immutable transaction
+tx = (TempoTransaction.create(chain_id=42429)
+    .with_gas(100_000)
+    .with_max_fee_per_gas(2_000_000_000)
+    .with_max_priority_fee_per_gas(1_000_000_000)
+    .with_nonce(0)
+    .with_fee_token("0x20c0000000000000000000000000000000000001")
     .add_call("0xRecipient...", value=1000)
-    .build())
-
-# Sign returns a new immutable transaction
-signed_tx = tx.sign("0xYourPrivateKey...")
+    .sign("0xYourPrivateKey..."))
 
 # Send using web3.py
-tx_hash = w3.eth.send_raw_transaction(signed_tx.encode())
+tx_hash = w3.eth.send_raw_transaction(tx.encode())
 ```
 
 ### Legacy API (Backwards Compatible)
@@ -95,22 +92,36 @@ receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
 The typed API provides immutable dataclasses with validation:
 
 ```python
-from pytempo import TempoTransactionBuilder, Call, AccessListItem
+from pytempo import TempoTransaction, Call, AccessListItem
 
-# Builder pattern with fluent API
-tx = (TempoTransactionBuilder(chain_id=42429)
-    .set_gas(100_000)
-    .set_max_fee_per_gas(2_000_000_000)
+# Chainable methods return new immutable instances
+tx = (TempoTransaction.create(chain_id=42429)
+    .with_gas(100_000)
+    .with_max_fee_per_gas(2_000_000_000)
     .add_call("0xRecipient...", value=1000, data="0xabcd")
     .add_call("0xOther...", value=2000)  # Batch multiple calls
-    .set_fee_token("0x20c0000000000000000000000000000000000001")
-    .sponsored()  # Mark for fee payer
-    .build())  # Validates and returns immutable transaction
+    .with_fee_token("0x20c0000000000000000000000000000000000001")
+    .sponsored())  # Mark for fee payer
 
 # Immutable signing - returns new transaction
 signed = tx.sign("0xPrivateKey...")
 assert tx.sender_signature is None  # Original unchanged
 assert signed.sender_signature is not None
+```
+
+### Parsing from Dicts
+
+```python
+from pytempo import TempoTransaction
+
+# Supports both camelCase and snake_case keys
+tx = TempoTransaction.from_dict({
+    "chainId": 42429,
+    "gas": 100_000,
+    "maxFeePerGas": 2_000_000_000,
+    "to": "0xRecipient...",
+    "value": 1000,
+})
 ```
 
 ### Type Coercion Helpers
@@ -168,26 +179,19 @@ tx = create_tempo_transaction(
 ### Gas Sponsorship
 
 ```python
-# User creates and signs
-tx = create_tempo_transaction(
-    to="0xRecipient...",
-    value=1000000000000000,
-    gas=100000,
-    max_fee_per_gas=2000000000,
-    max_priority_fee_per_gas=2000000000,
-    nonce=0,
-    chain_id=42429,
-    fee_token="0xTokenAddress...",
-)
+from pytempo import TempoTransaction
 
-# Mark that fee payer will sign
-tx._will_have_fee_payer = True
-
-# User signs
-tx.sign("0xUserPrivateKey...", for_fee_payer=False)
+# User creates and signs a sponsored transaction
+tx = (TempoTransaction.create(chain_id=42429)
+    .with_gas(100_000)
+    .with_max_fee_per_gas(2_000_000_000)
+    .add_call("0xRecipient...", value=1000)
+    .with_fee_token("0xTokenAddress...")
+    .sponsored()  # Mark for fee payer
+    .sign("0xUserPrivateKey..."))
 
 # Fee payer signs (pays gas)
-tx.sign("0xFeePayerPrivateKey...", for_fee_payer=True)
+tx = tx.sign("0xFeePayerPrivateKey...", for_fee_payer=True)
 
 # Send
 w3.eth.send_raw_transaction(tx.encode())
@@ -196,50 +200,90 @@ w3.eth.send_raw_transaction(tx.encode())
 ### Batch Multiple Calls
 
 ```python
-tx = create_tempo_transaction(
-    to="",  # Not used
-    calls=[
-        {"to": "0xAddress1...", "value": 100000, "data": "0x"},
-        {"to": "0xAddress2...", "value": 200000, "data": "0xabcdef"},
-    ],
-    gas=200000,
-    max_fee_per_gas=2000000000,
-    max_priority_fee_per_gas=2000000000,
-    nonce=0,
-    chain_id=42429,
-)
+from pytempo import TempoTransaction
+
+tx = (TempoTransaction.create(chain_id=42429)
+    .with_gas(200_000)
+    .with_max_fee_per_gas(2_000_000_000)
+    .add_call("0xAddress1...", value=100000)
+    .add_call("0xAddress2...", value=200000, data="0xabcdef")
+    .sign("0xPrivateKey..."))
 ```
 
 ### Parallel Nonces
 
 ```python
-# Use different nonce keys for parallel execution
-tx1 = create_tempo_transaction(
-    to="0xRecipient...",
-    nonce=0,
-    nonce_key=1,  # First parallel key
-    # ... other params
-)
+from pytempo import TempoTransaction
 
-tx2 = create_tempo_transaction(
-    to="0xRecipient...",
-    nonce=0,
-    nonce_key=2,  # Second parallel key
-    # ... other params
-)
+# Use different nonce keys for parallel execution
+tx1 = (TempoTransaction.create(chain_id=42429)
+    .with_nonce(0)
+    .with_nonce_key(1)  # First parallel key
+    .with_gas(100_000)
+    .add_call("0xRecipient..."))
+
+tx2 = (TempoTransaction.create(chain_id=42429)
+    .with_nonce(0)
+    .with_nonce_key(2)  # Second parallel key
+    .with_gas(100_000)
+    .add_call("0xRecipient..."))
 
 # Both can be executed in parallel
 ```
 
+### Contract Creation
+
+```python
+from pytempo import TempoTransaction
+
+tx = (TempoTransaction.create(chain_id=42429)
+    .with_gas(500_000)
+    .add_contract_creation(data="0x6080604052...")
+    .sign("0xPrivateKey..."))
+```
+
 ## API Reference
+
+### `TempoTransaction` (Recommended)
+
+Immutable, strongly-typed transaction. All methods return new instances.
+
+**Factory Methods:**
+
+- `TempoTransaction.create(**kwargs)` - Create with type coercion
+- `TempoTransaction.from_dict(d)` - Parse from camelCase/snake_case dict
+
+**Chainable Methods (return new `TempoTransaction`):**
+
+- `with_gas(gas_limit)` - Set gas limit
+- `with_max_fee_per_gas(max_fee)` - Set max fee per gas
+- `with_max_priority_fee_per_gas(priority_fee)` - Set priority fee
+- `with_nonce(nonce)` - Set nonce
+- `with_nonce_key(nonce_key)` - Set nonce key for parallel execution
+- `with_valid_before(timestamp)` - Set expiration timestamp
+- `with_valid_after(timestamp)` - Set activation timestamp
+- `with_fee_token(token)` - Set fee token address
+- `sponsored(enabled=True)` - Mark for fee payer
+- `add_call(to, value=0, data=b"")` - Add a call
+- `add_contract_creation(value=0, data=b"")` - Add contract creation
+- `add_access_list_item(address, storage_keys=())` - Add access list entry
+- `sign(private_key, for_fee_payer=False)` - Sign transaction
+
+**Other Methods:**
+
+- `encode()` - Encode to bytes for transmission
+- `hash()` - Get transaction hash
+- `get_signing_hash(for_fee_payer=False)` - Get hash to sign
+- `vrs()` - Get v, r, s values
+- `validate()` - Validate transaction fields
 
 ### `patch_web3_for_tempo()`
 
 Monkey patches web3.py to recognize Tempo AA transactions. **Must be called before using web3**.
 
-### `create_tempo_transaction(...)`
+### `create_tempo_transaction(...)` (Legacy)
 
-Creates a Tempo AA transaction.
+Creates a mutable Tempo AA transaction.
 
 **Parameters:**
 
@@ -257,19 +301,17 @@ Creates a Tempo AA transaction.
 - `valid_before` (int, optional): Timestamp before which tx is valid
 - `valid_after` (int, optional): Timestamp after which tx becomes valid
 
-**Returns:** `TempoAATransaction`
+**Returns:** `LegacyTempoTransaction`
 
-### `TempoAATransaction`
+## Development
 
-Main transaction class.
-
-**Methods:**
-
-- `sign(private_key, for_fee_payer=False)` - Sign the transaction
-- `encode()` - Encode to bytes for transmission
-- `hash()` - Get transaction hash
-- `get_signing_hash(for_fee_payer=False)` - Get hash to sign
-- `vrs()` - Get v, r, s values (secp256k1 only)
+```bash
+make install  # Install dependencies
+make test     # Run tests
+make lint     # Lint
+make format   # Format code
+make check    # Run all checks (lint + format-check + test)
+```
 
 ## Examples
 
