@@ -5,13 +5,12 @@ Extends web3.py with native support for Tempo transactions (Type 0x76)
 and other Tempo-specific features.
 
 Strongly-Typed API (Recommended):
-    from pytempo import TempoTransactionBuilder
+    from pytempo import TempoTransaction
 
-    tx = (TempoTransactionBuilder(chain_id=42429)
-        .set_gas(100_000)
-        .set_max_fee_per_gas(2_000_000_000)
+    tx = (TempoTransaction.create(chain_id=42429)
+        .with_gas(100_000)
+        .with_max_fee_per_gas(2_000_000_000)
         .add_call("0xRecipient...", value=1000)
-        .build()
         .sign("0xPrivateKey..."))
 
 Legacy API (Backwards Compatible):
@@ -22,7 +21,6 @@ Legacy API (Backwards Compatible):
     tx.sign("0xPrivateKey...")
 """
 
-from .builder import TempoTransactionBuilder
 from .keychain import (
     ACCOUNT_KEYCHAIN_ADDRESS,
     GET_REMAINING_LIMIT_SELECTOR,
@@ -38,13 +36,11 @@ from .models import (
     AccessListItem,
     Call,
     Signature,
-)
-from .models import (
-    TempoTransaction as TypedTempoTransaction,
+    TempoTransaction,
 )
 from .transaction import (
+    LegacyTempoTransaction,
     TempoAATransaction,
-    TempoTransaction,
     create_tempo_transaction,
     patch_web3_for_tempo,
 )
@@ -67,15 +63,13 @@ __all__ = [
     "as_address",
     "as_bytes",
     "as_hash32",
-    # Models
+    # Models (strongly-typed API)
     "Call",
     "AccessListItem",
     "Signature",
-    "TypedTempoTransaction",
-    # Builder
-    "TempoTransactionBuilder",
-    # Transaction (backwards compatible)
     "TempoTransaction",
+    # Legacy API (backwards compatible)
+    "LegacyTempoTransaction",
     "TempoAATransaction",
     "create_tempo_transaction",
     "patch_web3_for_tempo",

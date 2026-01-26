@@ -1,10 +1,13 @@
-"""Tempo Transaction (Type 0x76) implementation with RLP encoding and web3.py integration.
+"""Tempo Transaction (Type 0x76) - Legacy mutable wrapper for backwards compatibility.
 
-This module provides backwards-compatible APIs while internally using strongly-typed models.
-For new code, prefer using the typed models directly:
+For new code, prefer using the strongly-typed immutable API:
 
-    from pytempo.models import TempoTransaction, Call
-    from pytempo.builder import TempoTransactionBuilder
+    from pytempo import TempoTransaction
+
+    tx = (TempoTransaction.create(chain_id=42429)
+        .with_gas(100_000)
+        .add_call("0xRecipient...", value=1000)
+        .sign("0xPrivateKey..."))
 """
 
 from typing import Optional
@@ -12,34 +15,28 @@ from typing import Optional
 from eth_account import Account
 from eth_utils import to_bytes
 
-from .builder import TempoTransactionBuilder
 from .models import AccessListItem, Call, Signature
 from .models import TempoTransaction as TypedTempoTransaction
 from .types import Address, as_address
 
 __all__ = [
-    "TempoTransaction",
+    "LegacyTempoTransaction",
     "TempoAATransaction",
     "create_tempo_transaction",
     "patch_web3_for_tempo",
-    "Call",
-    "AccessListItem",
-    "Signature",
-    "TempoTransactionBuilder",
 ]
 
 
-class TempoTransaction:
+class LegacyTempoTransaction:
     """
     Tempo Transaction (Type 0x76) - Mutable wrapper for backwards compatibility.
 
-    For new code, prefer using TempoTransactionBuilder which returns immutable transactions:
+    For new code, prefer using the immutable TempoTransaction:
 
-        tx = (TempoTransactionBuilder(chain_id=42429)
+        tx = (TempoTransaction.create(chain_id=42429)
             .add_call("0xRecipient...", value=1000)
-            .set_gas(100_000)
-            .build())
-        signed_tx = tx.sign("0xPrivateKey...")
+            .with_gas(100_000)
+            .sign("0xPrivateKey..."))
     """
 
     TRANSACTION_TYPE = 0x76
@@ -242,7 +239,9 @@ class TempoTransaction:
         """Get v, r, s values for secp256k1 signatures."""
         return (self.v, self.r, self.s)
 
-    def sign(self, private_key: str, for_fee_payer: bool = False) -> "TempoTransaction":
+    def sign(
+        self, private_key: str, for_fee_payer: bool = False
+    ) -> "LegacyTempoTransaction":
         """
         Sign the transaction with secp256k1 private key.
 
@@ -274,7 +273,7 @@ class TempoTransaction:
         return self
 
 
-TempoAATransaction = TempoTransaction
+TempoAATransaction = LegacyTempoTransaction
 
 
 def create_tempo_transaction(
@@ -292,7 +291,7 @@ def create_tempo_transaction(
     valid_before: Optional[int] = None,
     valid_after: Optional[int] = None,
     **kwargs,
-) -> TempoTransaction:
+) -> LegacyTempoTransaction:
     """
     Create a Tempo transaction.
 
@@ -313,7 +312,7 @@ def create_tempo_transaction(
         **kwargs: Additional optional fields
 
     Returns:
-        TempoTransaction ready to sign
+        LegacyTempoTransaction ready to sign
     """
     tx_dict = {
         "chainId": chain_id,
@@ -340,7 +339,7 @@ def create_tempo_transaction(
 
     tx_dict.update(kwargs)
 
-    return TempoTransaction(tx_dict)
+    return LegacyTempoTransaction(tx_dict)
 
 
 def patch_web3_for_tempo():
@@ -367,7 +366,7 @@ def patch_web3_for_tempo():
         transaction_type = pipe(dictionary["type"], hexstr_if_str(to_int))
 
         if transaction_type == 0x76:
-            return TempoTransaction(dictionary)
+            return LegacyTempoTransaction(dictionary)
 
         return original_from_dict(cls, dictionary, blobs)
 

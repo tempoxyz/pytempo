@@ -1,4 +1,4 @@
-"""Tests for the strongly-typed models and builder."""
+"""Tests for the strongly-typed models."""
 
 import pytest
 
@@ -6,12 +6,11 @@ from pytempo import (
     AccessListItem,
     Call,
     Signature,
-    TempoTransactionBuilder,
+    TempoTransaction,
     as_address,
     as_bytes,
     as_hash32,
 )
-from pytempo.models import TempoTransaction as TypedTempoTransaction
 
 
 class TestTypes:
@@ -111,16 +110,16 @@ class TestSignature:
             Signature.from_bytes(b"\x00" * 64)
 
 
-class TestTypedTempoTransaction:
-    """Test the immutable TypedTempoTransaction."""
+class TestTempoTransaction:
+    """Test the immutable TempoTransaction."""
 
     def test_validate_empty_calls(self):
-        tx = TypedTempoTransaction(chain_id=1, gas_limit=21000, calls=())
+        tx = TempoTransaction(chain_id=1, gas_limit=21000, calls=())
         with pytest.raises(ValueError, match="at least one call"):
             tx.validate()
 
     def test_validate_invalid_chain_id(self):
-        tx = TypedTempoTransaction(
+        tx = TempoTransaction(
             chain_id=0,
             gas_limit=21000,
             calls=(Call.create(to="0x" + "a" * 40, value=0, data=b""),),
@@ -129,7 +128,7 @@ class TestTypedTempoTransaction:
             tx.validate()
 
     def test_validate_fee_mismatch(self):
-        tx = TypedTempoTransaction(
+        tx = TempoTransaction(
             chain_id=1,
             gas_limit=21000,
             max_fee_per_gas=100,
@@ -140,7 +139,7 @@ class TestTypedTempoTransaction:
             tx.validate()
 
     def test_sign_returns_new_transaction(self):
-        tx = TypedTempoTransaction(
+        tx = TempoTransaction(
             chain_id=42429,
             gas_limit=100000,
             max_fee_per_gas=2000000000,
@@ -162,18 +161,34 @@ class TestTypedTempoTransaction:
         assert signed_tx.sender_address is not None
         assert tx.sender_signature is None
 
+    def test_create_factory(self):
+        tx = TempoTransaction.create(
+            chain_id=42429,
+            gas_limit=100000,
+            max_fee_per_gas=2000000000,
+            max_priority_fee_per_gas=1000000000,
+        )
 
-class TestTempoTransactionBuilder:
-    """Test the builder pattern."""
+        assert tx.chain_id == 42429
+        assert tx.gas_limit == 100000
+        assert tx.calls == ()
 
-    def test_basic_build(self):
+    def test_create_with_fee_token_coercion(self):
+        tx = TempoTransaction.create(
+            chain_id=42429,
+            fee_token="0x20c0000000000000000000000000000000000001",
+        )
+
+        assert tx.fee_token is not None
+        assert len(tx.fee_token) == 20
+
+    def test_chainable_add_call(self):
         tx = (
-            TempoTransactionBuilder(chain_id=42429)
-            .set_gas(100000)
-            .set_max_fee_per_gas(2000000000)
-            .set_max_priority_fee_per_gas(1000000000)
+            TempoTransaction.create(chain_id=42429)
+            .with_gas(100000)
+            .with_max_fee_per_gas(2000000000)
+            .with_max_priority_fee_per_gas(1000000000)
             .add_call("0xF0109fC8DF283027b6285cc889F5aA624EaC1F55", value=1000)
-            .build()
         )
 
         assert tx.chain_id == 42429
@@ -181,80 +196,107 @@ class TestTempoTransactionBuilder:
         assert len(tx.calls) == 1
         assert tx.calls[0].value == 1000
 
-    def test_build_with_multiple_calls(self):
+    def test_chainable_multiple_calls(self):
         tx = (
-            TempoTransactionBuilder(chain_id=42429)
-            .set_gas(200000)
+            TempoTransaction.create(chain_id=42429)
+            .with_gas(200000)
             .add_call("0x" + "a" * 40, value=100)
             .add_call("0x" + "b" * 40, value=200, data="0xabcd")
-            .build()
         )
 
         assert len(tx.calls) == 2
         assert tx.calls[0].value == 100
         assert tx.calls[1].value == 200
 
-    def test_build_with_access_list(self):
+    def test_chainable_access_list(self):
         tx = (
-            TempoTransactionBuilder(chain_id=42429)
-            .set_gas(100000)
+            TempoTransaction.create(chain_id=42429)
+            .with_gas(100000)
             .add_call("0x" + "a" * 40)
             .add_access_list_item("0x" + "b" * 40, ("0x" + "c" * 64,))
-            .build()
         )
 
         assert len(tx.access_list) == 1
         assert len(tx.access_list[0].storage_keys) == 1
 
-    def test_build_sponsored(self):
+    def test_sponsored(self):
         tx = (
-            TempoTransactionBuilder(chain_id=42429)
-            .set_gas(100000)
+            TempoTransaction.create(chain_id=42429)
+            .with_gas(100000)
             .add_call("0x" + "a" * 40)
             .sponsored()
-            .build()
         )
 
         assert tx.awaiting_fee_payer is True
 
-    def test_build_with_fee_token(self):
+    def test_with_fee_token(self):
         tx = (
-            TempoTransactionBuilder(chain_id=42429)
-            .set_gas(100000)
+            TempoTransaction.create(chain_id=42429)
+            .with_gas(100000)
             .add_call("0x" + "a" * 40)
-            .set_fee_token("0x20c0000000000000000000000000000000000001")
-            .build()
+            .with_fee_token("0x20c0000000000000000000000000000000000001")
         )
 
         assert tx.fee_token is not None
         assert len(tx.fee_token) == 20
 
-    def test_build_with_validity_window(self):
+    def test_validity_window(self):
         tx = (
-            TempoTransactionBuilder(chain_id=42429)
-            .set_gas(100000)
+            TempoTransaction.create(chain_id=42429)
+            .with_gas(100000)
             .add_call("0x" + "a" * 40)
-            .set_valid_after(1000)
-            .set_valid_before(2000)
-            .build()
+            .with_valid_after(1000)
+            .with_valid_before(2000)
         )
 
         assert tx.valid_after == 1000
         assert tx.valid_before == 2000
 
-    def test_build_fails_without_calls(self):
-        builder = TempoTransactionBuilder(chain_id=42429).set_gas(100000)
-
-        with pytest.raises(ValueError, match="at least one call"):
-            builder.build()
-
     def test_contract_creation(self):
         tx = (
-            TempoTransactionBuilder(chain_id=42429)
-            .set_gas(500000)
+            TempoTransaction.create(chain_id=42429)
+            .with_gas(500000)
             .add_contract_creation(value=0, data="0x6080604052")
-            .build()
         )
 
         assert len(tx.calls) == 1
         assert tx.calls[0].to == b""
+
+    def test_from_dict_camel_case(self):
+        tx = TempoTransaction.from_dict(
+            {
+                "chainId": 42429,
+                "gas": 100000,
+                "maxFeePerGas": 2000000000,
+                "to": "0x" + "a" * 40,
+                "value": 1000,
+            }
+        )
+
+        assert tx.chain_id == 42429
+        assert tx.gas_limit == 100000
+        assert len(tx.calls) == 1
+        assert tx.calls[0].value == 1000
+
+    def test_from_dict_snake_case(self):
+        tx = TempoTransaction.from_dict(
+            {
+                "chain_id": 42429,
+                "gas_limit": 100000,
+                "max_fee_per_gas": 2000000000,
+                "calls": [{"to": "0x" + "a" * 40, "value": 500}],
+            }
+        )
+
+        assert tx.chain_id == 42429
+        assert tx.gas_limit == 100000
+        assert len(tx.calls) == 1
+        assert tx.calls[0].value == 500
+
+    def test_immutability_preserved(self):
+        tx1 = TempoTransaction.create(chain_id=42429).add_call("0x" + "a" * 40)
+        tx2 = tx1.with_gas(200000)
+
+        assert tx1.gas_limit == 21000
+        assert tx2.gas_limit == 200000
+        assert tx1 is not tx2

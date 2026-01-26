@@ -106,6 +106,13 @@ class TempoTransaction:
     - Optional fee tokens
     - Transaction expiry windows
     - Access keys with spending limits
+
+    Example:
+        tx = (TempoTransaction.create(chain_id=42429)
+            .with_gas(100_000)
+            .with_max_fee_per_gas(2_000_000_000)
+            .add_call("0xRecipient...", value=1000)
+            .sign("0xPrivateKey..."))
     """
 
     TRANSACTION_TYPE: int = field(default=0x76, init=False, repr=False)
@@ -134,6 +141,213 @@ class TempoTransaction:
     sender_signature: Optional[Signature] = None
 
     tempo_authorization_list: tuple[bytes, ...] = ()
+
+    # -------------------------------------------------------------------------
+    # Factory methods
+    # -------------------------------------------------------------------------
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        chain_id: int = 1,
+        gas_limit: int = 21_000,
+        max_fee_per_gas: int = 0,
+        max_priority_fee_per_gas: int = 0,
+        nonce: int = 0,
+        nonce_key: int = 0,
+        valid_before: Optional[int] = None,
+        valid_after: Optional[int] = None,
+        fee_token: Optional[BytesLike] = None,
+        awaiting_fee_payer: bool = False,
+        calls: tuple[Call, ...] = (),
+        access_list: tuple[AccessListItem, ...] = (),
+        tempo_authorization_list: tuple[BytesLike, ...] = (),
+    ) -> "TempoTransaction":
+        """
+        Create a transaction with automatic type coercion.
+
+        Args:
+            chain_id: Chain ID (default: 1)
+            gas_limit: Gas limit (default: 21_000)
+            max_fee_per_gas: Max fee per gas in wei
+            max_priority_fee_per_gas: Max priority fee per gas in wei
+            nonce: Transaction nonce
+            nonce_key: Nonce key for 2D nonce system
+            valid_before: Expiration timestamp (optional)
+            valid_after: Activation timestamp (optional)
+            fee_token: Fee token address as hex string or bytes (optional)
+            awaiting_fee_payer: Whether transaction awaits fee payer signature
+            calls: Tuple of Call objects
+            access_list: Tuple of AccessListItem objects
+            tempo_authorization_list: Tuple of authorization bytes
+
+        Returns:
+            New TempoTransaction instance
+        """
+        return cls(
+            chain_id=chain_id,
+            gas_limit=gas_limit,
+            max_fee_per_gas=max_fee_per_gas,
+            max_priority_fee_per_gas=max_priority_fee_per_gas,
+            nonce=nonce,
+            nonce_key=nonce_key,
+            valid_before=valid_before,
+            valid_after=valid_after,
+            fee_token=as_address(fee_token) if fee_token else None,
+            awaiting_fee_payer=awaiting_fee_payer,
+            calls=tuple(calls),
+            access_list=tuple(access_list),
+            tempo_authorization_list=tuple(
+                as_bytes(x) for x in tempo_authorization_list
+            ),
+        )
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "TempoTransaction":
+        """
+        Parse a transaction from a dict with camelCase or snake_case keys.
+
+        Supports legacy single-call format (to/value/data) and batched calls format.
+        """
+
+        def get_key(*keys, default=None):
+            for key in keys:
+                if key in d:
+                    return d[key]
+            return default
+
+        chain_id = get_key("chainId", "chain_id", default=1)
+        max_priority_fee = get_key(
+            "maxPriorityFeePerGas", "max_priority_fee_per_gas", default=0
+        )
+        max_fee = get_key("maxFeePerGas", "max_fee_per_gas", default=0)
+        gas_limit = get_key("gas", "gasLimit", "gas_limit", default=21_000)
+
+        calls_data = get_key("calls", default=[])
+        if not calls_data:
+            to_addr = get_key("to", default="")
+            value = get_key("value", default=0)
+            data = get_key("data", "input", default="0x")
+            if to_addr or value or (data and data != "0x"):
+                calls_data = [{"to": to_addr, "value": value, "data": data}]
+
+        calls = tuple(
+            Call.create(
+                to=call.get("to", "") or b"",
+                value=call.get("value", 0),
+                data=call.get("data", call.get("input", "0x")),
+            )
+            for call in calls_data
+        )
+
+        access_list_data = get_key("accessList", "access_list", default=[])
+        access_list = tuple(
+            AccessListItem.create(
+                address=item["address"],
+                storage_keys=tuple(
+                    item.get("storageKeys", item.get("storage_keys", []))
+                ),
+            )
+            for item in access_list_data
+        )
+
+        fee_token_raw = get_key("feeToken", "fee_token")
+        fee_token = as_address(fee_token_raw) if fee_token_raw else None
+
+        tempo_auth = get_key(
+            "tempoAuthorizationList",
+            "tempo_authorization_list",
+            "aaAuthorizationList",
+            "aa_authorization_list",
+            default=[],
+        )
+
+        return cls(
+            chain_id=chain_id,
+            max_priority_fee_per_gas=max_priority_fee,
+            max_fee_per_gas=max_fee,
+            gas_limit=gas_limit,
+            calls=calls,
+            access_list=access_list,
+            nonce_key=get_key("nonceKey", "nonce_key", default=0),
+            nonce=get_key("nonce", default=0),
+            valid_before=get_key("validBefore", "valid_before"),
+            valid_after=get_key("validAfter", "valid_after"),
+            fee_token=fee_token,
+            awaiting_fee_payer=bool(
+                get_key("_will_have_fee_payer", "awaiting_fee_payer", default=False)
+            ),
+            tempo_authorization_list=tuple(as_bytes(x) for x in tempo_auth),
+        )
+
+    # -------------------------------------------------------------------------
+    # Chainable immutable mutators
+    # -------------------------------------------------------------------------
+
+    def with_gas(self, gas_limit: int) -> "TempoTransaction":
+        """Return a new transaction with updated gas limit."""
+        return replace(self, gas_limit=gas_limit)
+
+    def with_max_fee_per_gas(self, max_fee: int) -> "TempoTransaction":
+        """Return a new transaction with updated max fee per gas."""
+        return replace(self, max_fee_per_gas=max_fee)
+
+    def with_max_priority_fee_per_gas(self, priority_fee: int) -> "TempoTransaction":
+        """Return a new transaction with updated max priority fee per gas."""
+        return replace(self, max_priority_fee_per_gas=priority_fee)
+
+    def with_nonce(self, nonce: int) -> "TempoTransaction":
+        """Return a new transaction with updated nonce."""
+        return replace(self, nonce=nonce)
+
+    def with_nonce_key(self, nonce_key: int) -> "TempoTransaction":
+        """Return a new transaction with updated nonce key."""
+        return replace(self, nonce_key=nonce_key)
+
+    def with_valid_before(self, timestamp: int) -> "TempoTransaction":
+        """Return a new transaction with expiration timestamp."""
+        return replace(self, valid_before=timestamp)
+
+    def with_valid_after(self, timestamp: int) -> "TempoTransaction":
+        """Return a new transaction with activation timestamp."""
+        return replace(self, valid_after=timestamp)
+
+    def with_fee_token(self, token: BytesLike) -> "TempoTransaction":
+        """Return a new transaction with fee token address."""
+        return replace(self, fee_token=as_address(token))
+
+    def sponsored(self, enabled: bool = True) -> "TempoTransaction":
+        """Return a new transaction marked as awaiting fee payer signature."""
+        return replace(self, awaiting_fee_payer=enabled)
+
+    def add_call(
+        self,
+        to: BytesLike,
+        value: int = 0,
+        data: BytesLike = b"",
+    ) -> "TempoTransaction":
+        """Return a new transaction with an additional call."""
+        new_call = Call.create(to=to, value=value, data=data)
+        return replace(self, calls=self.calls + (new_call,))
+
+    def add_contract_creation(
+        self,
+        value: int = 0,
+        data: BytesLike = b"",
+    ) -> "TempoTransaction":
+        """Return a new transaction with a contract creation call."""
+        new_call = Call.create(to=b"", value=value, data=data)
+        return replace(self, calls=self.calls + (new_call,))
+
+    def add_access_list_item(
+        self,
+        address: BytesLike,
+        storage_keys: tuple[BytesLike, ...] = (),
+    ) -> "TempoTransaction":
+        """Return a new transaction with an additional access list entry."""
+        new_item = AccessListItem.create(address=address, storage_keys=storage_keys)
+        return replace(self, access_list=self.access_list + (new_item,))
 
     def validate(self, *, require_sender: bool = False) -> None:
         """Validate the transaction fields."""
