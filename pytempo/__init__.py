@@ -5,13 +5,15 @@ Extends web3.py with native support for Tempo transactions (Type 0x76)
 and other Tempo-specific features.
 
 Strongly-Typed API (Recommended):
-    from pytempo import TempoTransaction
+    from pytempo import TempoTransaction, Call
 
-    tx = (TempoTransaction.create(chain_id=42429)
-        .with_gas(100_000)
-        .with_max_fee_per_gas(2_000_000_000)
-        .add_call("0xRecipient...", value=1000)
-        .sign("0xPrivateKey..."))
+    tx = TempoTransaction.create(
+        chain_id=42429,
+        gas_limit=100_000,
+        max_fee_per_gas=2_000_000_000,
+        calls=(Call.create(to="0xRecipient...", value=1000),),
+    )
+    signed_tx = tx.sign("0xPrivateKey...")
 
 Legacy API (Backwards Compatible):
     from pytempo import create_tempo_transaction, patch_web3_for_tempo

@@ -6,7 +6,7 @@ These tests verify that both APIs produce identical results for the same inputs.
 
 import pytest
 
-from pytempo import TempoTransaction, create_tempo_transaction
+from pytempo import Call, TempoTransaction, create_tempo_transaction
 
 # Test private key for signing
 TEST_PRIVATE_KEY = "0x7eafbf9699b30c9ed8e3d6bbae57dd4f047544fde34d4c982dd591c2bee39ad0"
@@ -34,10 +34,10 @@ EQUIVALENCE_TEST_CASES = [
                 nonce=0,
                 chain_id=1,
             ),
-            "typed": lambda: (
-                TempoTransaction.create(chain_id=1)
-                .with_gas(21000)
-                .add_call(ADDR_A, value=0)
+            "typed": lambda: TempoTransaction.create(
+                chain_id=1,
+                gas_limit=21000,
+                calls=(Call.create(to=ADDR_A, value=0),),
             ),
         },
         id="minimal_transaction",
@@ -54,13 +54,13 @@ EQUIVALENCE_TEST_CASES = [
                 nonce=5,
                 chain_id=42429,
             ),
-            "typed": lambda: (
-                TempoTransaction.create(chain_id=42429)
-                .with_gas(100000)
-                .with_max_fee_per_gas(2000000000)
-                .with_max_priority_fee_per_gas(1000000000)
-                .with_nonce(5)
-                .add_call(ADDR_A, value=1000000000000000)
+            "typed": lambda: TempoTransaction.create(
+                chain_id=42429,
+                gas_limit=100000,
+                max_fee_per_gas=2000000000,
+                max_priority_fee_per_gas=1000000000,
+                nonce=5,
+                calls=(Call.create(to=ADDR_A, value=1000000000000000),),
             ),
         },
         id="basic_with_value",
@@ -78,12 +78,12 @@ EQUIVALENCE_TEST_CASES = [
                 nonce=0,
                 chain_id=42429,
             ),
-            "typed": lambda: (
-                TempoTransaction.create(chain_id=42429)
-                .with_gas(100000)
-                .with_max_fee_per_gas(2000000000)
-                .with_max_priority_fee_per_gas(1000000000)
-                .add_call(ADDR_A, value=0, data="0xabcdef1234567890")
+            "typed": lambda: TempoTransaction.create(
+                chain_id=42429,
+                gas_limit=100000,
+                max_fee_per_gas=2000000000,
+                max_priority_fee_per_gas=1000000000,
+                calls=(Call.create(to=ADDR_A, value=0, data="0xabcdef1234567890"),),
             ),
         },
         id="with_data",
@@ -104,13 +104,13 @@ EQUIVALENCE_TEST_CASES = [
                 chain_id=42429,
                 fee_token=FEE_TOKEN,
             ),
-            "typed": lambda: (
-                TempoTransaction.create(chain_id=42429)
-                .with_gas(100000)
-                .with_max_fee_per_gas(2000000000)
-                .with_max_priority_fee_per_gas(1000000000)
-                .with_fee_token(FEE_TOKEN)
-                .add_call(ADDR_A, value=0)
+            "typed": lambda: TempoTransaction.create(
+                chain_id=42429,
+                gas_limit=100000,
+                max_fee_per_gas=2000000000,
+                max_priority_fee_per_gas=1000000000,
+                fee_token=FEE_TOKEN,
+                calls=(Call.create(to=ADDR_A, value=0),),
             ),
         },
         id="with_fee_token",
@@ -131,14 +131,14 @@ EQUIVALENCE_TEST_CASES = [
                 nonce_key=5,
                 chain_id=42429,
             ),
-            "typed": lambda: (
-                TempoTransaction.create(chain_id=42429)
-                .with_gas(100000)
-                .with_max_fee_per_gas(2000000000)
-                .with_max_priority_fee_per_gas(1000000000)
-                .with_nonce(10)
-                .with_nonce_key(5)
-                .add_call(ADDR_A, value=0)
+            "typed": lambda: TempoTransaction.create(
+                chain_id=42429,
+                gas_limit=100000,
+                max_fee_per_gas=2000000000,
+                max_priority_fee_per_gas=1000000000,
+                nonce=10,
+                nonce_key=5,
+                calls=(Call.create(to=ADDR_A, value=0),),
             ),
         },
         id="with_nonce_key",
@@ -159,13 +159,13 @@ EQUIVALENCE_TEST_CASES = [
                 chain_id=42429,
                 valid_before=1800000000,
             ),
-            "typed": lambda: (
-                TempoTransaction.create(chain_id=42429)
-                .with_gas(100000)
-                .with_max_fee_per_gas(2000000000)
-                .with_max_priority_fee_per_gas(1000000000)
-                .with_valid_before(1800000000)
-                .add_call(ADDR_A, value=0)
+            "typed": lambda: TempoTransaction.create(
+                chain_id=42429,
+                gas_limit=100000,
+                max_fee_per_gas=2000000000,
+                max_priority_fee_per_gas=1000000000,
+                valid_before=1800000000,
+                calls=(Call.create(to=ADDR_A, value=0),),
             ),
         },
         id="with_valid_before",
@@ -183,13 +183,13 @@ EQUIVALENCE_TEST_CASES = [
                 chain_id=42429,
                 valid_after=1700000000,
             ),
-            "typed": lambda: (
-                TempoTransaction.create(chain_id=42429)
-                .with_gas(100000)
-                .with_max_fee_per_gas(2000000000)
-                .with_max_priority_fee_per_gas(1000000000)
-                .with_valid_after(1700000000)
-                .add_call(ADDR_A, value=0)
+            "typed": lambda: TempoTransaction.create(
+                chain_id=42429,
+                gas_limit=100000,
+                max_fee_per_gas=2000000000,
+                max_priority_fee_per_gas=1000000000,
+                valid_after=1700000000,
+                calls=(Call.create(to=ADDR_A, value=0),),
             ),
         },
         id="with_valid_after",
@@ -208,14 +208,14 @@ EQUIVALENCE_TEST_CASES = [
                 valid_after=1700000000,
                 valid_before=1800000000,
             ),
-            "typed": lambda: (
-                TempoTransaction.create(chain_id=42429)
-                .with_gas(100000)
-                .with_max_fee_per_gas(2000000000)
-                .with_max_priority_fee_per_gas(1000000000)
-                .with_valid_after(1700000000)
-                .with_valid_before(1800000000)
-                .add_call(ADDR_A, value=0)
+            "typed": lambda: TempoTransaction.create(
+                chain_id=42429,
+                gas_limit=100000,
+                max_fee_per_gas=2000000000,
+                max_priority_fee_per_gas=1000000000,
+                valid_after=1700000000,
+                valid_before=1800000000,
+                calls=(Call.create(to=ADDR_A, value=0),),
             ),
         },
         id="with_validity_window",
@@ -238,13 +238,15 @@ EQUIVALENCE_TEST_CASES = [
                 nonce=0,
                 chain_id=42429,
             ),
-            "typed": lambda: (
-                TempoTransaction.create(chain_id=42429)
-                .with_gas(200000)
-                .with_max_fee_per_gas(2000000000)
-                .with_max_priority_fee_per_gas(1000000000)
-                .add_call(ADDR_A, value=100)
-                .add_call(ADDR_B, value=200)
+            "typed": lambda: TempoTransaction.create(
+                chain_id=42429,
+                gas_limit=200000,
+                max_fee_per_gas=2000000000,
+                max_priority_fee_per_gas=1000000000,
+                calls=(
+                    Call.create(to=ADDR_A, value=100),
+                    Call.create(to=ADDR_B, value=200),
+                ),
             ),
         },
         id="batch_two_calls",
@@ -265,14 +267,16 @@ EQUIVALENCE_TEST_CASES = [
                 nonce=0,
                 chain_id=42429,
             ),
-            "typed": lambda: (
-                TempoTransaction.create(chain_id=42429)
-                .with_gas(300000)
-                .with_max_fee_per_gas(2000000000)
-                .with_max_priority_fee_per_gas(1000000000)
-                .add_call(ADDR_A, value=0, data="0xaabbcc")
-                .add_call(ADDR_B, value=1000, data="0xddeeff")
-                .add_call(ADDR_C, value=2000, data="0x112233")
+            "typed": lambda: TempoTransaction.create(
+                chain_id=42429,
+                gas_limit=300000,
+                max_fee_per_gas=2000000000,
+                max_priority_fee_per_gas=1000000000,
+                calls=(
+                    Call.create(to=ADDR_A, value=0, data="0xaabbcc"),
+                    Call.create(to=ADDR_B, value=1000, data="0xddeeff"),
+                    Call.create(to=ADDR_C, value=2000, data="0x112233"),
+                ),
             ),
         },
         id="batch_three_calls_with_data",
@@ -293,12 +297,12 @@ EQUIVALENCE_TEST_CASES = [
                 nonce=0,
                 chain_id=42429,
             ),
-            "typed": lambda: (
-                TempoTransaction.create(chain_id=42429)
-                .with_gas(500000)
-                .with_max_fee_per_gas(2000000000)
-                .with_max_priority_fee_per_gas(1000000000)
-                .add_contract_creation(data="0x6080604052")
+            "typed": lambda: TempoTransaction.create(
+                chain_id=42429,
+                gas_limit=500000,
+                max_fee_per_gas=2000000000,
+                max_priority_fee_per_gas=1000000000,
+                calls=(Call.create(to=b"", value=0, data="0x6080604052"),),
             ),
         },
         id="contract_creation",
@@ -325,18 +329,20 @@ EQUIVALENCE_TEST_CASES = [
                 valid_after=1700000000,
                 valid_before=1800000000,
             ),
-            "typed": lambda: (
-                TempoTransaction.create(chain_id=42429)
-                .with_gas(500000)
-                .with_max_fee_per_gas(5000000000)
-                .with_max_priority_fee_per_gas(2000000000)
-                .with_nonce(42)
-                .with_nonce_key(7)
-                .with_fee_token(FEE_TOKEN)
-                .with_valid_after(1700000000)
-                .with_valid_before(1800000000)
-                .add_call(ADDR_A, value=1000, data="0xabcd")
-                .add_call(ADDR_B, value=2000, data="0xef01")
+            "typed": lambda: TempoTransaction.create(
+                chain_id=42429,
+                gas_limit=500000,
+                max_fee_per_gas=5000000000,
+                max_priority_fee_per_gas=2000000000,
+                nonce=42,
+                nonce_key=7,
+                fee_token=FEE_TOKEN,
+                valid_after=1700000000,
+                valid_before=1800000000,
+                calls=(
+                    Call.create(to=ADDR_A, value=1000, data="0xabcd"),
+                    Call.create(to=ADDR_B, value=2000, data="0xef01"),
+                ),
             ),
         },
         id="full_featured_transaction",
@@ -353,13 +359,13 @@ EQUIVALENCE_TEST_CASES = [
                 nonce=999999,
                 chain_id=42429,
             ),
-            "typed": lambda: (
-                TempoTransaction.create(chain_id=42429)
-                .with_gas(10000000)
-                .with_max_fee_per_gas(100000000000)
-                .with_max_priority_fee_per_gas(50000000000)
-                .with_nonce(999999)
-                .add_call(ADDR_A, value=10**18)
+            "typed": lambda: TempoTransaction.create(
+                chain_id=42429,
+                gas_limit=10000000,
+                max_fee_per_gas=100000000000,
+                max_priority_fee_per_gas=50000000000,
+                nonce=999999,
+                calls=(Call.create(to=ADDR_A, value=10**18),),
             ),
         },
         id="high_gas_values",

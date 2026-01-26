@@ -120,11 +120,13 @@ class TempoTransaction:
     - Access keys with spending limits
 
     Example:
-        tx = (TempoTransaction.create(chain_id=42429)
-            .with_gas(100_000)
-            .with_max_fee_per_gas(2_000_000_000)
-            .add_call("0xRecipient...", value=1000)
-            .sign("0xPrivateKey..."))
+        tx = TempoTransaction.create(
+            chain_id=42429,
+            gas_limit=100_000,
+            max_fee_per_gas=2_000_000_000,
+            calls=(Call.create(to="0xRecipient...", value=1000),),
+        )
+        signed_tx = tx.sign("0xPrivateKey...")
     """
 
     TRANSACTION_TYPE: int = field(default=0x76, init=False, repr=False)
@@ -291,74 +293,6 @@ class TempoTransaction:
             ),
             tempo_authorization_list=tuple(as_bytes(x) for x in tempo_auth),
         )
-
-    # -------------------------------------------------------------------------
-    # Chainable immutable mutators
-    # -------------------------------------------------------------------------
-
-    def with_gas(self, gas_limit: int) -> "TempoTransaction":
-        """Return a new transaction with updated gas limit."""
-        return replace(self, gas_limit=gas_limit)
-
-    def with_max_fee_per_gas(self, max_fee: int) -> "TempoTransaction":
-        """Return a new transaction with updated max fee per gas."""
-        return replace(self, max_fee_per_gas=max_fee)
-
-    def with_max_priority_fee_per_gas(self, priority_fee: int) -> "TempoTransaction":
-        """Return a new transaction with updated max priority fee per gas."""
-        return replace(self, max_priority_fee_per_gas=priority_fee)
-
-    def with_nonce(self, nonce: int) -> "TempoTransaction":
-        """Return a new transaction with updated nonce."""
-        return replace(self, nonce=nonce)
-
-    def with_nonce_key(self, nonce_key: int) -> "TempoTransaction":
-        """Return a new transaction with updated nonce key."""
-        return replace(self, nonce_key=nonce_key)
-
-    def with_valid_before(self, timestamp: int) -> "TempoTransaction":
-        """Return a new transaction with expiration timestamp."""
-        return replace(self, valid_before=timestamp)
-
-    def with_valid_after(self, timestamp: int) -> "TempoTransaction":
-        """Return a new transaction with activation timestamp."""
-        return replace(self, valid_after=timestamp)
-
-    def with_fee_token(self, token: BytesLike) -> "TempoTransaction":
-        """Return a new transaction with fee token address."""
-        return replace(self, fee_token=as_address(token))
-
-    def sponsored(self, enabled: bool = True) -> "TempoTransaction":
-        """Return a new transaction marked as awaiting fee payer signature."""
-        return replace(self, awaiting_fee_payer=enabled)
-
-    def add_call(
-        self,
-        to: BytesLike,
-        value: int = 0,
-        data: BytesLike = b"",
-    ) -> "TempoTransaction":
-        """Return a new transaction with an additional call."""
-        new_call = Call.create(to=to, value=value, data=data)
-        return replace(self, calls=self.calls + (new_call,))
-
-    def add_contract_creation(
-        self,
-        value: int = 0,
-        data: BytesLike = b"",
-    ) -> "TempoTransaction":
-        """Return a new transaction with a contract creation call."""
-        new_call = Call.create(to=b"", value=value, data=data)
-        return replace(self, calls=self.calls + (new_call,))
-
-    def add_access_list_item(
-        self,
-        address: BytesLike,
-        storage_keys: tuple[BytesLike, ...] = (),
-    ) -> "TempoTransaction":
-        """Return a new transaction with an additional access list entry."""
-        new_item = AccessListItem.create(address=address, storage_keys=storage_keys)
-        return replace(self, access_list=self.access_list + (new_item,))
 
     def validate(self, *, require_sender: bool = False) -> None:
         """Validate the transaction fields."""

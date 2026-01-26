@@ -182,13 +182,17 @@ class TestTempoTransaction:
         assert tx.fee_token is not None
         assert len(tx.fee_token) == 20
 
-    def test_chainable_add_call(self):
-        tx = (
-            TempoTransaction.create(chain_id=42429)
-            .with_gas(100000)
-            .with_max_fee_per_gas(2000000000)
-            .with_max_priority_fee_per_gas(1000000000)
-            .add_call("0xF0109fC8DF283027b6285cc889F5aA624EaC1F55", value=1000)
+    def test_create_with_calls(self):
+        tx = TempoTransaction.create(
+            chain_id=42429,
+            gas_limit=100000,
+            max_fee_per_gas=2000000000,
+            max_priority_fee_per_gas=1000000000,
+            calls=(
+                Call.create(
+                    to="0xF0109fC8DF283027b6285cc889F5aA624EaC1F55", value=1000
+                ),
+            ),
         )
 
         assert tx.chain_id == 42429
@@ -196,67 +200,74 @@ class TestTempoTransaction:
         assert len(tx.calls) == 1
         assert tx.calls[0].value == 1000
 
-    def test_chainable_multiple_calls(self):
-        tx = (
-            TempoTransaction.create(chain_id=42429)
-            .with_gas(200000)
-            .add_call("0x" + "a" * 40, value=100)
-            .add_call("0x" + "b" * 40, value=200, data="0xabcd")
+    def test_create_multiple_calls(self):
+        tx = TempoTransaction.create(
+            chain_id=42429,
+            gas_limit=200000,
+            calls=(
+                Call.create(to="0x" + "a" * 40, value=100),
+                Call.create(to="0x" + "b" * 40, value=200, data="0xabcd"),
+            ),
         )
 
         assert len(tx.calls) == 2
         assert tx.calls[0].value == 100
         assert tx.calls[1].value == 200
 
-    def test_chainable_access_list(self):
-        tx = (
-            TempoTransaction.create(chain_id=42429)
-            .with_gas(100000)
-            .add_call("0x" + "a" * 40)
-            .add_access_list_item("0x" + "b" * 40, ("0x" + "c" * 64,))
+    def test_create_with_access_list(self):
+        tx = TempoTransaction.create(
+            chain_id=42429,
+            gas_limit=100000,
+            calls=(Call.create(to="0x" + "a" * 40),),
+            access_list=(
+                AccessListItem.create(
+                    address="0x" + "b" * 40,
+                    storage_keys=("0x" + "c" * 64,),
+                ),
+            ),
         )
 
         assert len(tx.access_list) == 1
         assert len(tx.access_list[0].storage_keys) == 1
 
-    def test_sponsored(self):
-        tx = (
-            TempoTransaction.create(chain_id=42429)
-            .with_gas(100000)
-            .add_call("0x" + "a" * 40)
-            .sponsored()
+    def test_create_sponsored(self):
+        tx = TempoTransaction.create(
+            chain_id=42429,
+            gas_limit=100000,
+            calls=(Call.create(to="0x" + "a" * 40),),
+            awaiting_fee_payer=True,
         )
 
         assert tx.awaiting_fee_payer is True
 
-    def test_with_fee_token(self):
-        tx = (
-            TempoTransaction.create(chain_id=42429)
-            .with_gas(100000)
-            .add_call("0x" + "a" * 40)
-            .with_fee_token("0x20c0000000000000000000000000000000000001")
+    def test_create_with_fee_token(self):
+        tx = TempoTransaction.create(
+            chain_id=42429,
+            gas_limit=100000,
+            fee_token="0x20c0000000000000000000000000000000000001",
+            calls=(Call.create(to="0x" + "a" * 40),),
         )
 
         assert tx.fee_token is not None
         assert len(tx.fee_token) == 20
 
-    def test_validity_window(self):
-        tx = (
-            TempoTransaction.create(chain_id=42429)
-            .with_gas(100000)
-            .add_call("0x" + "a" * 40)
-            .with_valid_after(1000)
-            .with_valid_before(2000)
+    def test_create_validity_window(self):
+        tx = TempoTransaction.create(
+            chain_id=42429,
+            gas_limit=100000,
+            valid_after=1000,
+            valid_before=2000,
+            calls=(Call.create(to="0x" + "a" * 40),),
         )
 
         assert tx.valid_after == 1000
         assert tx.valid_before == 2000
 
     def test_contract_creation(self):
-        tx = (
-            TempoTransaction.create(chain_id=42429)
-            .with_gas(500000)
-            .add_contract_creation(value=0, data="0x6080604052")
+        tx = TempoTransaction.create(
+            chain_id=42429,
+            gas_limit=500000,
+            calls=(Call.create(to=b"", value=0, data="0x6080604052"),),
         )
 
         assert len(tx.calls) == 1
@@ -294,8 +305,13 @@ class TestTempoTransaction:
         assert tx.calls[0].value == 500
 
     def test_immutability_preserved(self):
-        tx1 = TempoTransaction.create(chain_id=42429).add_call("0x" + "a" * 40)
-        tx2 = tx1.with_gas(200000)
+        from dataclasses import replace
+
+        tx1 = TempoTransaction.create(
+            chain_id=42429,
+            calls=(Call.create(to="0x" + "a" * 40),),
+        )
+        tx2 = replace(tx1, gas_limit=200000)
 
         assert tx1.gas_limit == 21000
         assert tx2.gas_limit == 200000
