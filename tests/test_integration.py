@@ -89,7 +89,7 @@ class TestTransactionCreation:
             calls=(Call.create(to=RECIPIENT_ADDRESS, value=0),),
         )
         signed = tx.sign(TEST_PRIVATE_KEY)
-        assert signed.signature is not None
+        assert signed.sender_signature is not None
 
     def test_encode_signed_transaction(self, chain_id):
         """Test encoding a signed transaction."""
