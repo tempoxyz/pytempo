@@ -102,7 +102,7 @@ jobs:
           docker run -d --name tempo \
             -p 8545:8545 \
             ghcr.io/tempoxyz/tempo:latest \
-            --dev
+            node --dev --http --http.addr 0.0.0.0 --http.port 8545 --http.api eth,net,web3,txpool,trace --chain dev
 
       - name: Wait for Tempo node
         run: |
