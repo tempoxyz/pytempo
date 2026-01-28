@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  schedule:
+    - cron: '0 */6 * * *'  # Every 6 hours - catch tempo drift early
+  workflow_dispatch:  # Manual trigger
 
 jobs:
   lint:
@@ -74,3 +77,107 @@ jobs:
         run: |
           uv run pip install dist/*.whl
           uv run python -c "import pytempo; print(pytempo.__version__)"
+
+  integration-localnet:
+    name: Integration Tests (Localnet)
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Start Tempo node
+        run: |
+          docker run -d --name tempo \
+            -p 8545:8545 \
+            ghcr.io/tempoxyz/tempo:latest \
+            --dev
+
+      - name: Wait for Tempo node
+        run: |
+          echo "Waiting for Tempo node to start..."
+          for i in {1..30}; do
+            if curl -s http://localhost:8545 > /dev/null 2>&1; then
+              echo "Tempo node is ready!"
+              exit 0
+            fi
+            echo "Attempt $i: Tempo node not ready yet..."
+            sleep 2
+          done
+          echo "Tempo node failed to start"
+          docker logs tempo
+          exit 1
+
+      - name: Run integration tests
+        run: uv run pytest -v tests/test_integration.py
+        env:
+          TEMPO_RPC_URL: http://localhost:8545
+
+      - name: Show Tempo node logs on failure
+        if: failure()
+        run: docker logs tempo
+
+      - name: Stop Tempo node
+        if: always()
+        run: docker rm -f tempo || true
+
+  integration-devnet:
+    name: Integration Tests (Devnet)
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Run integration tests against devnet
+        run: uv run pytest -v tests/test_integration.py
+        env:
+          TEMPO_RPC_URL: ${{ secrets.DEVNET_RPC_URL }}
+
+  integration-testnet:
+    name: Integration Tests (Testnet)
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Run integration tests against testnet
+        run: uv run pytest -v tests/test_integration.py
+        env:
+          TEMPO_RPC_URL: ${{ secrets.TESTNET_RPC_URL }}
