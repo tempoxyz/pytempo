@@ -9,7 +9,7 @@ import os
 import pytest
 from web3 import Web3
 
-from pytempo import TempoTransaction, Call, patch_web3_for_tempo
+from pytempo import Call, TempoTransaction, patch_web3_for_tempo
 
 # Test accounts (Anvil/Hardhat defaults - only use on devnets)
 TEST_PRIVATE_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
