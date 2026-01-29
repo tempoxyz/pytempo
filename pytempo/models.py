@@ -133,6 +133,14 @@ class Signature:
     def to_bytes(self) -> bytes:
         return self.r.to_bytes(32, "big") + self.s.to_bytes(32, "big") + bytes([self.v])
 
+    def to_rlp_list(self) -> list:
+        """Return [v, r, s] for RLP encoding as a list (used for fee_payer_signature).
+
+        Note: Tempo RLP encoding uses [v, r, s] order (via write_rlp_vrs).
+        """
+        v_normalized = self.v if self.v in (0, 1) else self.v - 27
+        return [v_normalized, self.r, self.s]
+
     @classmethod
     def from_bytes(cls, sig_bytes: bytes) -> "Signature":
         """Parse a 65-byte signature and validate r/s/v ranges.
@@ -462,15 +470,23 @@ class TempoTransaction:
         """
         self.validate()
 
-        def sig_to_bytes(sig: Optional[Signature | bytes]) -> bytes:
+        def sender_sig_to_bytes(sig: Optional[Signature | bytes]) -> bytes:
             if sig is None:
                 return b""
             if isinstance(sig, bytes):
                 return sig
             return sig.to_bytes()
 
-        sender_sig = sig_to_bytes(self.sender_signature)
-        fee_payer_sig = sig_to_bytes(self.fee_payer_signature)
+        def fee_payer_sig_to_rlp(sig: Optional[Signature | bytes]) -> list | bytes:
+            """Encode fee_payer_signature as RLP list [v, r, s] or empty bytes."""
+            if sig is None:
+                return b""
+            if isinstance(sig, bytes):
+                return sig
+            return sig.to_rlp_list()
+
+        sender_sig = sender_sig_to_bytes(self.sender_signature)
+        fee_payer_sig = fee_payer_sig_to_rlp(self.fee_payer_signature)
 
         fields = [
             self.chain_id,
