@@ -20,7 +20,9 @@ import os
 import time
 
 import pytest
+from eth_abi import encode
 from eth_account import Account
+from eth_utils import function_signature_to_4byte_selector
 from web3 import Web3
 
 from pytempo import (
@@ -33,47 +35,10 @@ from pytempo import (
 
 def encode_call(signature: str, *args) -> bytes:
     """Encode a function call with selector and ABI-encoded arguments."""
-    from web3 import Web3
-
-    w3 = Web3()
-    return w3.eth.contract(
-        abi=[
-            {
-                "name": signature.split("(")[0],
-                "type": "function",
-                "inputs": _parse_inputs(signature),
-                "outputs": [],
-            }
-        ]
-    ).encode_abi(signature.split("(")[0], args)
-
-
-def _parse_inputs(signature: str) -> list:
-    """Parse function signature into ABI input spec."""
-    start = signature.index("(") + 1
-    end = signature.rindex(")")
-    params_str = signature[start:end]
-    if not params_str:
-        return []
-
-    inputs = []
-    depth = 0
-    current = ""
-    for char in params_str:
-        if char == "(":
-            depth += 1
-            current += char
-        elif char == ")":
-            depth -= 1
-            current += char
-        elif char == "," and depth == 0:
-            inputs.append({"type": current.strip(), "name": f"arg{len(inputs)}"})
-            current = ""
-        else:
-            current += char
-    if current.strip():
-        inputs.append({"type": current.strip(), "name": f"arg{len(inputs)}"})
-    return inputs
+    selector = function_signature_to_4byte_selector(signature)
+    params_str = signature[signature.index("(") + 1 : signature.rindex(")")]
+    param_types = [p.strip() for p in params_str.split(",")] if params_str else []
+    return selector + encode(param_types, args)
 
 
 # Gas limits for AA transactions (higher intrinsic gas due to account abstraction)
