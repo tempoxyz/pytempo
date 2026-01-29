@@ -15,7 +15,7 @@ Total signature length: 86 bytes
 """
 
 from eth_account import Account
-from eth_utils import to_bytes, to_checksum_address
+from eth_utils import keccak, to_bytes, to_checksum_address
 
 # AccountKeychain precompile address
 ACCOUNT_KEYCHAIN_ADDRESS = "0xaAAAaaAA00000000000000000000000000000000"
@@ -24,6 +24,15 @@ ACCOUNT_KEYCHAIN_ADDRESS = "0xaAAAaaAA00000000000000000000000000000000"
 GET_REMAINING_LIMIT_SELECTOR = (
     "0x63b4290d"  # getRemainingLimit(address,address,address)
 )
+GET_KEY_SELECTOR = "0xbc298553"  # getKey(address,address)
+
+# Event signatures
+# KeyAuthorized(address indexed account, address indexed publicKey, uint8 signatureType, uint64 expiry)
+KEY_AUTHORIZED_TOPIC = (
+    "0x" + keccak(text="KeyAuthorized(address,address,uint8,uint64)").hex()
+)
+# KeyRevoked(address indexed account, address indexed publicKey)
+KEY_REVOKED_TOPIC = "0x" + keccak(text="KeyRevoked(address,address)").hex()
 
 # Keychain signature constants
 KEYCHAIN_SIGNATURE_TYPE = 0x03
@@ -155,3 +164,131 @@ def sign_tx_access_key(tx, access_key_private_key: str, root_account: str):
     tx.s = None
 
     return tx
+
+
+def get_access_key_info(
+    w3,
+    account_address: str,
+    key_id: str,
+) -> dict:
+    """Query access key info from the AccountKeychain precompile.
+
+    Args:
+        w3: Web3 instance connected to a Tempo RPC
+        account_address: The root wallet address
+        key_id: The access key ID (address)
+
+    Returns:
+        Dict with key info:
+        - signature_type: 0=Secp256k1, 1=P256, 2=WebAuthn
+        - key_id: The key address
+        - expiry: Unix timestamp when key expires (0 = no expiry)
+        - enforce_limits: Whether spending limits are enforced
+        - is_revoked: Whether key has been revoked
+
+        Returns empty dict if key doesn't exist or on error.
+    """
+    if not account_address or not key_id:
+        return {}
+
+    # Validate: account_address must differ from key_id
+    if account_address.lower() == key_id.lower():
+        return {}
+
+    try:
+        keychain = to_checksum_address(ACCOUNT_KEYCHAIN_ADDRESS)
+
+        # Encode calldata: selector + padded account + padded keyId
+        account_padded = account_address[2:].lower().zfill(64)
+        key_padded = key_id[2:].lower().zfill(64)
+        call_data = f"{GET_KEY_SELECTOR}{account_padded}{key_padded}"
+
+        result = w3.eth.call({"to": keychain, "data": call_data})
+
+        # Decode result: (uint8 signatureType, address keyId, uint64 expiry, bool enforceLimits, bool isRevoked)
+        # ABI encoding: each field is 32 bytes padded
+        if len(result) < 160:  # 5 * 32 bytes
+            return {}
+
+        signature_type = int.from_bytes(result[0:32], "big")
+        returned_key_id = "0x" + result[32:64].hex()[-40:]
+        expiry = int.from_bytes(result[64:96], "big")
+        enforce_limits = int.from_bytes(result[96:128], "big") != 0
+        is_revoked = int.from_bytes(result[128:160], "big") != 0
+
+        # If returned key_id is zero address, key doesn't exist
+        if returned_key_id == "0x" + "0" * 40:
+            return {}
+
+        return {
+            "signature_type": signature_type,
+            "key_id": to_checksum_address(returned_key_id),
+            "expiry": expiry,
+            "enforce_limits": enforce_limits,
+            "is_revoked": is_revoked,
+        }
+    except Exception:
+        return {}
+
+
+def list_access_keys(
+    w3,
+    account_address: str,
+    include_revoked: bool = False,
+) -> list[dict]:
+    """List all access keys for an account by querying KeyAuthorized events.
+
+    Queries the AccountKeychain precompile events to find all keys that have
+    been authorized for an account, then fetches current status for each.
+
+    Args:
+        w3: Web3 instance connected to a Tempo RPC
+        account_address: The root wallet address to list keys for
+        include_revoked: Whether to include revoked keys (default: False)
+
+    Returns:
+        List of dicts, each containing:
+        - key_id: The access key address
+        - signature_type: 0=Secp256k1, 1=P256, 2=WebAuthn
+        - expiry: Unix timestamp when key expires (0 = no expiry)
+        - enforce_limits: Whether spending limits are enforced
+        - is_revoked: Whether key has been revoked
+    """
+    if not account_address:
+        return []
+
+    try:
+        keychain = to_checksum_address(ACCOUNT_KEYCHAIN_ADDRESS)
+
+        # Pad address to 32 bytes for topic filter (indexed parameter)
+        addr_padded = "0x" + "0" * 24 + account_address[2:].lower()
+
+        # Query KeyAuthorized events for this account
+        logs = w3.eth.get_logs(
+            {
+                "address": keychain,
+                "fromBlock": "earliest",
+                "toBlock": "latest",
+                "topics": [KEY_AUTHORIZED_TOPIC, addr_padded],
+            }
+        )
+
+        # Extract unique key IDs from events
+        # topic[2] is the indexed publicKey (key_id)
+        key_ids = set()
+        for log in logs:
+            if len(log["topics"]) >= 3:
+                key_id = "0x" + log["topics"][2].hex()[-40:]
+                key_ids.add(to_checksum_address(key_id))
+
+        # Fetch current info for each key
+        keys = []
+        for key_id in key_ids:
+            info = get_access_key_info(w3, account_address, key_id)
+            if info:
+                if include_revoked or not info.get("is_revoked", False):
+                    keys.append(info)
+
+        return keys
+    except Exception:
+        return []

@@ -29,13 +29,18 @@ Legacy API (Backwards Compatible):
 
 from .keychain import (
     ACCOUNT_KEYCHAIN_ADDRESS,
+    GET_KEY_SELECTOR,
     GET_REMAINING_LIMIT_SELECTOR,
     INNER_SIGNATURE_LENGTH,
+    KEY_AUTHORIZED_TOPIC,
+    KEY_REVOKED_TOPIC,
     KEYCHAIN_SIGNATURE_LENGTH,
     KEYCHAIN_SIGNATURE_TYPE,
     build_keychain_signature,
     encode_get_remaining_limit_calldata,
+    get_access_key_info,
     get_remaining_spending_limit,
+    list_access_keys,
     sign_tx_access_key,
 )
 from .models import (
@@ -83,9 +88,14 @@ __all__ = [
     "patch_web3_for_tempo",
     # Keychain precompile
     "ACCOUNT_KEYCHAIN_ADDRESS",
+    "GET_KEY_SELECTOR",
     "GET_REMAINING_LIMIT_SELECTOR",
+    "KEY_AUTHORIZED_TOPIC",
+    "KEY_REVOKED_TOPIC",
     "encode_get_remaining_limit_calldata",
+    "get_access_key_info",
     "get_remaining_spending_limit",
+    "list_access_keys",
     # Keychain signing
     "KEYCHAIN_SIGNATURE_TYPE",
     "KEYCHAIN_SIGNATURE_LENGTH",
