@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock
 
 import pytest
+from eth_account import Account
 from eth_utils import to_bytes
 
 from pytempo import create_tempo_transaction
@@ -16,8 +17,14 @@ from pytempo.keychain import (
     KEY_REVOKED_TOPIC,
     KEYCHAIN_SIGNATURE_LENGTH,
     KEYCHAIN_SIGNATURE_TYPE,
+    # Key authorization classes
+    KeyAuthorization,
+    SignatureType,
+    SignedKeyAuthorization,
+    TokenLimit,
     # Signing functions
     build_keychain_signature,
+    create_key_authorization,
     # Precompile functions
     encode_get_remaining_limit_calldata,
     get_access_key_info,
@@ -523,3 +530,218 @@ class TestListAccessKeys:
         call_args = mock_w3.eth.get_logs.call_args[0][0]
         assert call_args["topics"][0] == KEY_AUTHORIZED_TOPIC
         assert account[2:].lower() in call_args["topics"][1].lower()
+
+
+class TestSignatureType:
+    """Tests for SignatureType constants."""
+
+    def test_secp256k1_is_zero(self):
+        assert SignatureType.SECP256K1 == 0
+
+    def test_p256_is_one(self):
+        assert SignatureType.P256 == 1
+
+    def test_webauthn_is_two(self):
+        assert SignatureType.WEBAUTHN == 2
+
+
+class TestTokenLimit:
+    """Tests for TokenLimit dataclass."""
+
+    def test_to_rlp(self):
+        """Should convert to RLP-serializable format."""
+        limit = TokenLimit(token="0x" + "a" * 40, limit=1000)
+        rlp_obj = limit.to_rlp()
+
+        assert rlp_obj.token == bytes.fromhex("a" * 40)
+        assert rlp_obj.limit == 1000
+
+
+class TestKeyAuthorization:
+    """Tests for KeyAuthorization dataclass."""
+
+    def test_rlp_encode_minimal(self):
+        """Should RLP encode with minimal fields."""
+        auth = KeyAuthorization(
+            chain_id=42429,
+            key_type=SignatureType.SECP256K1,
+            key_id="0x" + "b" * 40,
+        )
+
+        encoded = auth.rlp_encode()
+        assert isinstance(encoded, bytes)
+        assert len(encoded) > 0
+
+    def test_rlp_encode_with_expiry(self):
+        """Should RLP encode with expiry."""
+        auth = KeyAuthorization(
+            chain_id=42429,
+            key_type=SignatureType.SECP256K1,
+            key_id="0x" + "b" * 40,
+            expiry=1893456000,
+        )
+
+        encoded = auth.rlp_encode()
+        assert isinstance(encoded, bytes)
+
+    def test_rlp_encode_with_limits(self):
+        """Should RLP encode with token limits."""
+        auth = KeyAuthorization(
+            chain_id=42429,
+            key_type=SignatureType.SECP256K1,
+            key_id="0x" + "b" * 40,
+            limits=[TokenLimit(token="0x" + "c" * 40, limit=1000)],
+        )
+
+        encoded = auth.rlp_encode()
+        assert isinstance(encoded, bytes)
+
+    def test_signature_hash_deterministic(self):
+        """Should produce deterministic hash."""
+        auth = KeyAuthorization(
+            chain_id=42429,
+            key_type=SignatureType.SECP256K1,
+            key_id="0x" + "b" * 40,
+        )
+
+        hash1 = auth.signature_hash()
+        hash2 = auth.signature_hash()
+
+        assert hash1 == hash2
+        assert len(hash1) == 32
+
+    def test_signature_hash_different_for_different_auth(self):
+        """Different authorizations should have different hashes."""
+        auth1 = KeyAuthorization(
+            chain_id=42429,
+            key_type=SignatureType.SECP256K1,
+            key_id="0x" + "b" * 40,
+        )
+        auth2 = KeyAuthorization(
+            chain_id=42429,
+            key_type=SignatureType.SECP256K1,
+            key_id="0x" + "c" * 40,
+        )
+
+        assert auth1.signature_hash() != auth2.signature_hash()
+
+    def test_sign_returns_signed_authorization(self):
+        """Should return a SignedKeyAuthorization."""
+        private_key = "0x" + "a" * 64
+        auth = KeyAuthorization(
+            chain_id=42429,
+            key_type=SignatureType.SECP256K1,
+            key_id="0x" + "b" * 40,
+        )
+
+        signed = auth.sign(private_key)
+
+        assert isinstance(signed, SignedKeyAuthorization)
+        assert signed.authorization == auth
+        assert signed.v in (27, 28)
+        assert signed.r > 0
+        assert signed.s > 0
+
+
+class TestSignedKeyAuthorization:
+    """Tests for SignedKeyAuthorization dataclass."""
+
+    def test_rlp_encode(self):
+        """Should RLP encode the signed authorization."""
+        private_key = "0x" + "a" * 64
+        auth = KeyAuthorization(
+            chain_id=42429,
+            key_type=SignatureType.SECP256K1,
+            key_id="0x" + "b" * 40,
+        )
+        signed = auth.sign(private_key)
+
+        encoded = signed.rlp_encode()
+        assert isinstance(encoded, bytes)
+        assert len(encoded) > 0
+
+    def test_recover_signer(self):
+        """Should recover the correct signer address."""
+        private_key = "0x" + "a" * 64
+        account = Account.from_key(private_key)
+
+        auth = KeyAuthorization(
+            chain_id=42429,
+            key_type=SignatureType.SECP256K1,
+            key_id="0x" + "b" * 40,
+        )
+        signed = auth.sign(private_key)
+
+        recovered = signed.recover_signer()
+        assert recovered.lower() == account.address.lower()
+
+    def test_recover_signer_with_expiry_and_limits(self):
+        """Should recover signer for auth with all fields."""
+        private_key = "0x" + "a" * 64
+        account = Account.from_key(private_key)
+
+        auth = KeyAuthorization(
+            chain_id=42429,
+            key_type=SignatureType.P256,
+            key_id="0x" + "b" * 40,
+            expiry=1893456000,
+            limits=[TokenLimit(token="0x" + "c" * 40, limit=1000000)],
+        )
+        signed = auth.sign(private_key)
+
+        recovered = signed.recover_signer()
+        assert recovered.lower() == account.address.lower()
+
+
+class TestCreateKeyAuthorization:
+    """Tests for create_key_authorization helper function."""
+
+    def test_creates_basic_authorization(self):
+        """Should create a basic KeyAuthorization."""
+        auth = create_key_authorization(key_id="0x" + "b" * 40)
+
+        assert auth.chain_id == 0
+        assert auth.key_type == SignatureType.SECP256K1
+        assert auth.key_id == "0x" + "b" * 40
+        assert auth.expiry is None
+        assert auth.limits is None
+
+    def test_creates_with_all_options(self):
+        """Should create with all options specified."""
+        auth = create_key_authorization(
+            key_id="0x" + "b" * 40,
+            chain_id=42429,
+            key_type=SignatureType.WEBAUTHN,
+            expiry=1893456000,
+            limits=[{"token": "0x" + "c" * 40, "limit": 1000}],
+        )
+
+        assert auth.chain_id == 42429
+        assert auth.key_type == SignatureType.WEBAUTHN
+        assert auth.expiry == 1893456000
+        assert len(auth.limits) == 1
+        assert auth.limits[0].token == "0x" + "c" * 40
+        assert auth.limits[0].limit == 1000
+
+    def test_sign_and_use_workflow(self):
+        """Test the full workflow: create, sign, encode."""
+        private_key = "0x" + "a" * 64
+        account = Account.from_key(private_key)
+
+        # Create authorization
+        auth = create_key_authorization(
+            key_id="0x" + "b" * 40,
+            chain_id=42429,
+            expiry=1893456000,
+        )
+
+        # Sign it
+        signed = auth.sign(private_key)
+
+        # Verify signer
+        assert signed.recover_signer().lower() == account.address.lower()
+
+        # Encode for transaction
+        encoded = signed.rlp_encode()
+        assert isinstance(encoded, bytes)
+        assert len(encoded) > 0

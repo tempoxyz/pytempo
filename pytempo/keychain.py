@@ -12,10 +12,24 @@ Where:
 - inner_signature is the secp256k1 signature from the access key (r || s || v)
 
 Total signature length: 86 bytes
+
+KeyAuthorization:
+    Used to provision access keys inline within a Tempo transaction.
+    The authorization is RLP-encoded and signed by the root account.
+    Format: [chain_id, key_type, key_id, expiry?, limits?]
 """
 
+from dataclasses import dataclass
+from typing import Optional
+
+import rlp
 from eth_account import Account
 from eth_utils import keccak, to_bytes, to_checksum_address
+from rlp.sedes import Binary, big_endian_int
+
+# RLP sedes
+address_sedes = Binary.fixed_length(20, allow_empty=True)
+uint256_sedes = big_endian_int
 
 # AccountKeychain precompile address
 ACCOUNT_KEYCHAIN_ADDRESS = "0xaAAAaaAA00000000000000000000000000000000"
@@ -38,6 +52,229 @@ KEY_REVOKED_TOPIC = "0x" + keccak(text="KeyRevoked(address,address)").hex()
 KEYCHAIN_SIGNATURE_TYPE = 0x03
 INNER_SIGNATURE_LENGTH = 65  # r (32) + s (32) + v (1)
 KEYCHAIN_SIGNATURE_LENGTH = 86  # type (1) + address (20) + inner (65)
+
+
+# Signature types for access keys
+class SignatureType:
+    """Signature type constants for access keys."""
+
+    SECP256K1 = 0  # Standard Ethereum signature
+    P256 = 1  # NIST P-256 / secp256r1 (passkeys)
+    WEBAUTHN = 2  # WebAuthn/FIDO2
+
+
+class TokenLimitRLP(rlp.Serializable):
+    """RLP serializable token spending limit."""
+
+    fields = [
+        ("token", address_sedes),
+        ("limit", uint256_sedes),
+    ]
+
+
+@dataclass
+class TokenLimit:
+    """Token spending limit for access keys.
+
+    Defines a per-token spending limit for an access key provisioned via key_authorization.
+    This limit is enforced by the AccountKeychain precompile when the key is used.
+
+    Args:
+        token: TIP20 token address
+        limit: Maximum spending amount for this token (enforced over the key's lifetime)
+    """
+
+    token: str
+    limit: int
+
+    def to_rlp(self) -> TokenLimitRLP:
+        """Convert to RLP-serializable format."""
+        token_bytes = (
+            to_bytes(hexstr=self.token) if isinstance(self.token, str) else self.token
+        )
+        return TokenLimitRLP(token=token_bytes, limit=self.limit)
+
+
+@dataclass
+class KeyAuthorization:
+    """Key authorization for provisioning access keys.
+
+    Used in TempoTransaction to add a new key to the AccountKeychain precompile.
+    The transaction must be signed by the root key to authorize adding this access key.
+
+    Args:
+        chain_id: Chain ID for replay protection (0 = valid on any chain)
+        key_type: Type of key being authorized (SignatureType.SECP256K1, P256, or WEBAUTHN)
+        key_id: Key identifier (address derived from the public key)
+        expiry: Unix timestamp when key expires (None = never expires)
+        limits: Token spending limits (None = unlimited, [] = no spending, [...] = specific limits)
+    """
+
+    chain_id: int
+    key_type: int
+    key_id: str
+    expiry: Optional[int] = None
+    limits: Optional[list[TokenLimit]] = None
+
+    def rlp_encode(self) -> bytes:
+        """RLP encode the key authorization.
+
+        Format: [chain_id, key_type, key_id, expiry?, limits?]
+        - expiry and limits are optional trailing fields
+        """
+        key_id_bytes = (
+            to_bytes(hexstr=self.key_id)
+            if isinstance(self.key_id, str)
+            else self.key_id
+        )
+
+        # Build list with required fields
+        items: list = [self.chain_id, self.key_type, key_id_bytes]
+
+        # Add optional trailing fields
+        if self.expiry is not None or self.limits is not None:
+            items.append(self.expiry if self.expiry is not None else b"")
+
+        if self.limits is not None:
+            items.append([limit.to_rlp() for limit in self.limits])
+
+        return rlp.encode(items)
+
+    def signature_hash(self) -> bytes:
+        """Compute the authorization message hash for signing."""
+        return keccak(self.rlp_encode())
+
+    def sign(self, private_key: str) -> "SignedKeyAuthorization":
+        """Sign the key authorization with the root account's private key.
+
+        Args:
+            private_key: Root account private key (hex string with 0x prefix)
+
+        Returns:
+            SignedKeyAuthorization that can be attached to a transaction
+        """
+        msg_hash = self.signature_hash()
+        account = Account.from_key(private_key)
+        signed = account.unsafe_sign_hash(msg_hash)
+
+        return SignedKeyAuthorization(
+            authorization=self,
+            v=signed.v,
+            r=signed.r,
+            s=signed.s,
+        )
+
+
+@dataclass
+class SignedKeyAuthorization:
+    """Signed key authorization that can be attached to a transaction.
+
+    Contains the key authorization and the signature from the root account.
+    """
+
+    authorization: KeyAuthorization
+    v: int
+    r: int
+    s: int
+
+    def rlp_encode(self) -> bytes:
+        """RLP encode the signed key authorization.
+
+        Format: [[chain_id, key_type, key_id, expiry?, limits?], v, r, s]
+        """
+        # Encode authorization as nested list
+        key_id_bytes = (
+            to_bytes(hexstr=self.authorization.key_id)
+            if isinstance(self.authorization.key_id, str)
+            else self.authorization.key_id
+        )
+
+        auth_items: list = [
+            self.authorization.chain_id,
+            self.authorization.key_type,
+            key_id_bytes,
+        ]
+
+        if (
+            self.authorization.expiry is not None
+            or self.authorization.limits is not None
+        ):
+            auth_items.append(
+                self.authorization.expiry
+                if self.authorization.expiry is not None
+                else b""
+            )
+
+        if self.authorization.limits is not None:
+            auth_items.append([limit.to_rlp() for limit in self.authorization.limits])
+
+        # Build signed structure: [auth, v, r, s]
+        # Note: signature is appended as separate fields, not nested
+        r_bytes = self.r.to_bytes(32, "big")
+        s_bytes = self.s.to_bytes(32, "big")
+
+        return rlp.encode([auth_items, self.v, r_bytes, s_bytes])
+
+    def recover_signer(self) -> str:
+        """Recover the address that signed this authorization.
+
+        Returns:
+            Checksummed address of the signer (root account)
+        """
+        msg_hash = self.authorization.signature_hash()
+
+        # Reconstruct signature for recovery
+        signature = (
+            self.r.to_bytes(32, "big") + self.s.to_bytes(32, "big") + bytes([self.v])
+        )
+
+        recovered = Account._recover_hash(msg_hash, signature=signature)
+        return to_checksum_address(recovered)
+
+
+def create_key_authorization(
+    key_id: str,
+    chain_id: int = 0,
+    key_type: int = SignatureType.SECP256K1,
+    expiry: Optional[int] = None,
+    limits: Optional[list[dict]] = None,
+) -> KeyAuthorization:
+    """Create a key authorization for provisioning an access key.
+
+    Args:
+        key_id: Address of the access key to authorize
+        chain_id: Chain ID for replay protection (0 = valid on any chain)
+        key_type: Signature type (default: SECP256K1)
+        expiry: Unix timestamp when key expires (None = never expires)
+        limits: List of token limits as dicts with 'token' and 'limit' keys
+                (None = unlimited, [] = no spending)
+
+    Returns:
+        KeyAuthorization that can be signed by the root account
+
+    Example:
+        >>> auth = create_key_authorization(
+        ...     key_id="0xAccessKeyAddress...",
+        ...     chain_id=42429,
+        ...     expiry=1893456000,  # Year 2030
+        ...     limits=[{"token": "0xUSDC...", "limit": 1000 * 10**6}],
+        ... )
+        >>> signed = auth.sign("0xRootPrivateKey...")
+        >>> tx = TempoTransaction.create(..., key_authorization=signed.rlp_encode())
+    """
+    token_limits = None
+    if limits is not None:
+        token_limits = [
+            TokenLimit(token=lim["token"], limit=lim["limit"]) for lim in limits
+        ]
+
+    return KeyAuthorization(
+        chain_id=chain_id,
+        key_type=key_type,
+        key_id=key_id,
+        expiry=expiry,
+        limits=token_limits,
+    )
 
 
 def encode_get_remaining_limit_calldata(
