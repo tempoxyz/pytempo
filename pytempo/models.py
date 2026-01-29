@@ -478,7 +478,7 @@ class TempoTransaction:
             return sig.to_bytes()
 
         def fee_payer_sig_to_rlp(sig: Optional[Signature | bytes]) -> list | bytes:
-            """Encode fee_payer_signature as RLP list [r, s, v] or empty bytes."""
+            """Encode fee_payer_signature as RLP list [v, r, s] or empty bytes."""
             if sig is None:
                 return b""
             if isinstance(sig, bytes):
