@@ -4,7 +4,6 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
   schedule:
     - cron: '0 */6 * * *'  # Every 6 hours - catch tempo drift early
   workflow_dispatch:  # Manual trigger
@@ -119,8 +118,8 @@ jobs:
           docker logs tempo
           exit 1
 
-      - name: Run integration tests
-        run: uv run pytest -v tests/test_integration.py
+      - name: Run integration tests (offline only - localnet lacks tempo_fundAddress)
+        run: uv run pytest -v -s tests/test_integration.py -k "TestNodeConnection or TestTransactionCreation"
         env:
           TEMPO_RPC_URL: http://localhost:8545
 
@@ -136,7 +135,6 @@ jobs:
     name: Integration Tests (Devnet)
     runs-on: ubuntu-latest
     needs: [lint, test]
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
 
     steps:
       - uses: actions/checkout@v4
@@ -153,7 +151,7 @@ jobs:
         run: uv sync --all-extras --dev
 
       - name: Run integration tests against devnet
-        run: uv run pytest -v tests/test_integration.py
+        run: uv run pytest -v -s tests/test_integration.py
         env:
           TEMPO_RPC_URL: ${{ secrets.DEVNET_RPC_URL }}
 
@@ -161,7 +159,6 @@ jobs:
     name: Integration Tests (Testnet)
     runs-on: ubuntu-latest
     needs: [lint, test]
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
 
     steps:
       - uses: actions/checkout@v4
@@ -178,6 +175,6 @@ jobs:
         run: uv sync --all-extras --dev
 
       - name: Run integration tests against testnet
-        run: uv run pytest -v tests/test_integration.py
+        run: uv run pytest -v -s tests/test_integration.py
         env:
           TEMPO_RPC_URL: ${{ secrets.TESTNET_RPC_URL }}

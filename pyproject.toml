@@ -50,6 +50,11 @@ ignore = [
 quote-style = "double"
 indent-style = "space"
 
+[tool.pytest.ini_options]
+filterwarnings = [
+    "ignore::DeprecationWarning:websockets.legacy",
+]
+
 [dependency-groups]
 dev = [
     "pytest>=8.4.2",
