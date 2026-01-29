@@ -157,7 +157,9 @@ def sponsor_account(w3, rpc_url):
 def format_receipt(receipt: dict) -> str:
     """Format receipt in human-readable format similar to cast."""
     tx_type = receipt.get("type", 0)
-    type_name = {0x76: "Tempo (0x76)", 2: "EIP-1559", 0: "Legacy"}.get(tx_type, f"0x{tx_type:x}")
+    type_name = {0x76: "Tempo (0x76)", 2: "EIP-1559", 0: "Legacy"}.get(
+        tx_type, f"0x{tx_type:x}"
+    )
 
     lines = [
         f"status               {'true' if receipt.get('status') == 1 else 'false'}",
