@@ -85,7 +85,7 @@ def chain_id(w3):
     return w3.eth.chain_id
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="class")
 def funded_account(w3, rpc_url):
     """Create and fund a new account using tempo_fundAddress RPC."""
     account = Account.create()
@@ -456,11 +456,14 @@ class TestAccessKeys:
         )
         signed_auth = auth.sign(funded_account.key.hex())
 
+        # Use a unique nonce_key based on current time to avoid conflicts with stuck pool txs
+        nonce_key = 1000 + (int(time.time()) % 10000)
+
         # Build first transaction (with placeholder gas_limit)
         tx1 = TempoTransaction.create(
             chain_id=chain_id,
             nonce=0,
-            nonce_key=202,
+            nonce_key=nonce_key,
             gas_limit=0,  # Placeholder
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
@@ -481,7 +484,7 @@ class TestAccessKeys:
         tx1 = TempoTransaction.create(
             chain_id=chain_id,
             nonce=0,
-            nonce_key=202,
+            nonce_key=nonce_key,
             gas_limit=gas_estimate_with_auth,
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
@@ -501,7 +504,7 @@ class TestAccessKeys:
         tx2 = TempoTransaction.create(
             chain_id=chain_id,
             nonce=1,
-            nonce_key=202,
+            nonce_key=nonce_key,
             gas_limit=0,  # Placeholder
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
@@ -517,7 +520,7 @@ class TestAccessKeys:
         tx2 = TempoTransaction.create(
             chain_id=chain_id,
             nonce=1,
-            nonce_key=202,
+            nonce_key=nonce_key,
             gas_limit=gas_estimate_no_auth,
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
@@ -744,7 +747,7 @@ class TestSetUserFeeToken:
         tx1 = TempoTransaction.create(
             chain_id=chain_id,
             nonce=nonce,
-            gas_limit=BASE_GAS_LIMIT,
+            gas_limit=600_000,
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
             calls=(Call.create(to=FEE_CONTROLLER, data=set_calldata),),
@@ -761,7 +764,7 @@ class TestSetUserFeeToken:
         tx2 = TempoTransaction.create(
             chain_id=chain_id,
             nonce=nonce,
-            gas_limit=BASE_GAS_LIMIT,
+            gas_limit=600_000,
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
             calls=(Call.create(to=FEE_CONTROLLER, data=reset_calldata),),
