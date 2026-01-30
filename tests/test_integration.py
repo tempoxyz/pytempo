@@ -635,10 +635,11 @@ class TestSetUserFeeToken:
             "setUserToken(address)", Web3.to_checksum_address(BETA_USD)
         )
 
+        # Use HIGH_GAS_LIMIT for first tx (nonce=0) due to TIP-1000's 250k new account cost
         tx1 = TempoTransaction.create(
             chain_id=chain_id,
             nonce=nonce,
-            gas_limit=BASE_GAS_LIMIT,
+            gas_limit=HIGH_GAS_LIMIT,
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
             calls=(Call.create(to=FEE_CONTROLLER, data=set_calldata),),
