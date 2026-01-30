@@ -5,7 +5,7 @@ from typing import Optional
 import attrs
 import rlp
 from eth_account import Account
-from eth_utils import keccak
+from eth_utils import keccak, to_checksum_address
 
 from .types import (
     Address,
@@ -231,6 +231,10 @@ class TempoTransaction:
         factory=tuple, converter=_convert_tempo_auth_list
     )
 
+    key_authorization: Optional[bytes] = attrs.field(
+        default=None, converter=lambda x: as_bytes(x) if x is not None else None
+    )
+
     # -------------------------------------------------------------------------
     # Factory methods
     # -------------------------------------------------------------------------
@@ -252,6 +256,7 @@ class TempoTransaction:
         calls: tuple[Call, ...] = (),
         access_list: tuple[AccessListItem, ...] = (),
         tempo_authorization_list: tuple[BytesLike, ...] = (),
+        key_authorization: Optional[BytesLike] = None,
     ) -> "TempoTransaction":
         """
         Create a transaction with automatic type coercion.
@@ -270,6 +275,7 @@ class TempoTransaction:
             calls: Tuple of Call objects
             access_list: Tuple of AccessListItem objects
             tempo_authorization_list: Tuple of authorization bytes
+            key_authorization: Signed key authorization bytes (optional)
 
         Returns:
             New TempoTransaction instance
@@ -288,6 +294,7 @@ class TempoTransaction:
             calls=calls,
             access_list=access_list,
             tempo_authorization_list=tempo_authorization_list,
+            key_authorization=key_authorization,
         )
 
     @classmethod
@@ -438,6 +445,10 @@ class TempoTransaction:
             list(self.tempo_authorization_list),
         ]
 
+        if self.key_authorization is not None:
+            key_auth_decoded = rlp.decode(self.key_authorization)
+            fields.append(key_auth_decoded)
+
         return keccak(bytes([self.TRANSACTION_TYPE]) + rlp.encode(fields))
 
     def _signing_hash_fee_payer(self) -> bytes:
@@ -458,6 +469,10 @@ class TempoTransaction:
             bytes(self.sender_address),  # type: ignore[arg-type]
             list(self.tempo_authorization_list),
         ]
+
+        if self.key_authorization is not None:
+            key_auth_decoded = rlp.decode(self.key_authorization)
+            fields.append(key_auth_decoded)
 
         return keccak(bytes([self.FEE_PAYER_MAGIC_BYTE]) + rlp.encode(fields))
 
@@ -502,8 +517,17 @@ class TempoTransaction:
             bytes(self.fee_token) if self.fee_token else b"",
             fee_payer_sig,
             list(self.tempo_authorization_list),
-            sender_sig,
         ]
+
+        # key_authorization is a trailing optional field (only include when present)
+        # The field is already RLP-encoded, so we need to decode it first to get the
+        # raw structure, otherwise it gets double-encoded as a bytes string.
+        if self.key_authorization is not None:
+            key_auth_decoded = rlp.decode(self.key_authorization)
+            fields.append(key_auth_decoded)
+            fields.append(sender_sig)
+        else:
+            fields.append(sender_sig)
 
         return bytes([self.TRANSACTION_TYPE]) + rlp.encode(fields)
 
@@ -548,3 +572,51 @@ class TempoTransaction:
             sig = Signature(r=signed_msg.r, s=signed_msg.s, v=signed_msg.v)
             sender_addr = as_address(account.address)
             return attrs.evolve(self, sender_signature=sig, sender_address=sender_addr)
+
+    def to_estimate_gas_request(
+        self,
+        sender: str,
+        key_id: Optional[str] = None,
+        key_authorization: Optional[dict] = None,
+    ) -> dict:
+        """Build an eth_estimateGas request dict from this transaction.
+
+        Args:
+            sender: Address of the sender (hex string)
+            key_id: Optional access key address for keychain signature gas estimation
+            key_authorization: Optional SignedKeyAuthorization.to_json() dict
+
+        Returns:
+            Dict suitable for w3.eth.estimate_gas()
+
+        Example:
+            >>> gas = w3.eth.estimate_gas(tx.to_estimate_gas_request(sender))
+        """
+        if not self.calls:
+            raise ValueError("Transaction must have at least one call")
+
+        first_call = self.calls[0]
+        to_addr = bytes(first_call.to)
+        data = first_call.data
+        value = first_call.value
+
+        data_hex = "0x" + data.hex() if data else "0x"
+
+        request: dict = {
+            "from": sender,
+            "data": data_hex,
+        }
+
+        if to_addr:
+            request["to"] = to_checksum_address(to_addr)
+
+        if value:
+            request["value"] = hex(value)
+
+        if key_id is not None:
+            request["keyId"] = key_id
+
+        if key_authorization is not None:
+            request["keyAuthorization"] = key_authorization
+
+        return request

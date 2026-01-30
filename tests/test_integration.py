@@ -27,6 +27,8 @@ from web3 import Web3
 
 from pytempo import (
     Call,
+    KeyAuthorization,
+    SignatureType,
     TempoTransaction,
     patch_web3_for_tempo,
     sign_tx_access_key,
@@ -83,7 +85,7 @@ def chain_id(w3):
     return w3.eth.chain_id
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="class")
 def funded_account(w3, rpc_url):
     """Create and fund a new account using tempo_fundAddress RPC."""
     account = Account.create()
@@ -363,68 +365,175 @@ class TestExpiringNonces:
 
 
 class TestAccessKeys:
-    """Test access key signing (keychain)."""
+    """Test access key authorization and signing (keychain).
 
-    @pytest.mark.skip(
-        reason="Access key authorization may fail on devnet - needs investigation"
-    )
-    def test_authorize_and_use_access_key(self, w3, chain_id, funded_account):
-        """Test authorizing and using an access key."""
+    Tests the KeyAuthorization system which allows provisioning access keys
+    inline within a transaction, avoiding a separate on-chain authorizeKey call.
+    """
+
+    def test_add_access_key_with_key_authorization(self, w3, chain_id, funded_account):
+        """Test adding a new access key via inline KeyAuthorization.
+
+        Uses KeyAuthorization to provision an access key in the same transaction
+        that first uses it (key_authorization field).
+        """
         max_fee, priority_fee = get_gas_params(w3)
 
         access_key = Account.create()
 
-        nonce = w3.eth.get_transaction_count(funded_account.address)
-        calldata = encode_call(
-            "authorizeKey(address,uint8,uint64,bool,(address,uint256)[])",
-            Web3.to_checksum_address(access_key.address),
-            0,  # SignatureType: Secp256k1
-            1893456000,  # Expiry: year 2030
-            False,  # enforceLimits: false
-            [],  # limits: empty array
-        )
+        # Use dynamic expiry: 1 hour from now
+        expiry = int(time.time()) + 3600
 
-        auth_tx = TempoTransaction.create(
+        auth = KeyAuthorization(
             chain_id=chain_id,
-            nonce=nonce,
-            gas_limit=HIGH_GAS_LIMIT,
-            max_fee_per_gas=max_fee,
-            max_priority_fee_per_gas=priority_fee,
-            calls=(Call.create(to=ACCOUNT_KEYCHAIN, data=calldata),),
+            key_type=SignatureType.SECP256K1,
+            key_id=access_key.address,
+            expiry=expiry,
+            limits=None,
         )
-        signed = auth_tx.sign(funded_account.key.hex())
-        receipt = send_tx(w3, signed)
-        assert receipt["status"] == 1
+        signed_auth = auth.sign(funded_account.key.hex())
 
-        for _ in range(100):
-            try:
-                result = w3.provider.make_request(
-                    "tempo_fundAddress", [access_key.address]
-                )
-                if isinstance(result.get("result"), list):
-                    break
-            except Exception:
-                pass
-            time.sleep(0.2)
-        time.sleep(3)
-
+        # Build transaction (with placeholder gas_limit, will be updated after estimation)
         tx = TempoTransaction.create(
             chain_id=chain_id,
             nonce=0,
-            nonce_key=200,
-            gas_limit=BASE_GAS_LIMIT,
+            nonce_key=201,
+            gas_limit=0,  # Placeholder
+            max_fee_per_gas=max_fee,
+            max_priority_fee_per_gas=priority_fee,
+            calls=(Call.create(to=COUNTER_CONTRACT, data=bytes.fromhex("d09de08a")),),
+            key_authorization=signed_auth.rlp_encode(),
+        )
+
+        # Estimate gas from the transaction
+        gas_estimate = w3.eth.estimate_gas(
+            tx.to_estimate_gas_request(
+                funded_account.address,
+                key_id=access_key.address,
+                key_authorization=signed_auth.to_json(),
+            )
+        )
+
+        # Rebuild with correct gas limit
+        tx = TempoTransaction.create(
+            chain_id=chain_id,
+            nonce=0,
+            nonce_key=201,
+            gas_limit=gas_estimate,
+            max_fee_per_gas=max_fee,
+            max_priority_fee_per_gas=priority_fee,
+            calls=(Call.create(to=COUNTER_CONTRACT, data=bytes.fromhex("d09de08a")),),
+            key_authorization=signed_auth.rlp_encode(),
+        )
+
+        signed_tx = sign_tx_access_key(
+            tx,
+            access_key_private_key=access_key.key.hex(),
+            root_account=funded_account.address,
+        )
+        receipt = send_tx(w3, signed_tx)
+        assert receipt["status"] == 1
+
+    def test_sign_tx_with_existing_access_key(self, w3, chain_id, funded_account):
+        """Test signing a transaction with an already-authorized access key.
+
+        First provisions the access key inline, then uses that same key
+        for a subsequent transaction without needing a new authorization.
+        """
+        max_fee, priority_fee = get_gas_params(w3)
+
+        access_key = Account.create()
+
+        # Use dynamic expiry: 1 hour from now
+        expiry = int(time.time()) + 3600
+
+        auth = KeyAuthorization(
+            chain_id=chain_id,
+            key_type=SignatureType.SECP256K1,
+            key_id=access_key.address,
+            expiry=expiry,
+            limits=None,
+        )
+        signed_auth = auth.sign(funded_account.key.hex())
+
+        # Use a unique nonce_key based on current time to avoid conflicts with stuck pool txs
+        nonce_key = 1000 + (int(time.time()) % 10000)
+
+        # Build first transaction (with placeholder gas_limit)
+        tx1 = TempoTransaction.create(
+            chain_id=chain_id,
+            nonce=0,
+            nonce_key=nonce_key,
+            gas_limit=0,  # Placeholder
+            max_fee_per_gas=max_fee,
+            max_priority_fee_per_gas=priority_fee,
+            calls=(Call.create(to=COUNTER_CONTRACT, data=bytes.fromhex("d09de08a")),),
+            key_authorization=signed_auth.rlp_encode(),
+        )
+
+        # Estimate gas from the transaction
+        gas_estimate_with_auth = w3.eth.estimate_gas(
+            tx1.to_estimate_gas_request(
+                funded_account.address,
+                key_id=access_key.address,
+                key_authorization=signed_auth.to_json(),
+            )
+        )
+
+        # Rebuild with correct gas limit
+        tx1 = TempoTransaction.create(
+            chain_id=chain_id,
+            nonce=0,
+            nonce_key=nonce_key,
+            gas_limit=gas_estimate_with_auth,
+            max_fee_per_gas=max_fee,
+            max_priority_fee_per_gas=priority_fee,
+            calls=(Call.create(to=COUNTER_CONTRACT, data=bytes.fromhex("d09de08a")),),
+            key_authorization=signed_auth.rlp_encode(),
+        )
+
+        signed_tx1 = sign_tx_access_key(
+            tx1,
+            access_key_private_key=access_key.key.hex(),
+            root_account=funded_account.address,
+        )
+        receipt1 = send_tx(w3, signed_tx1)
+        assert receipt1["status"] == 1
+
+        # Build second tx and estimate gas (just keychain signature, no key_authorization)
+        tx2 = TempoTransaction.create(
+            chain_id=chain_id,
+            nonce=1,
+            nonce_key=nonce_key,
+            gas_limit=0,  # Placeholder
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
             calls=(Call.create(to=COUNTER_CONTRACT, data=bytes.fromhex("d09de08a")),),
         )
 
-        signed_with_access_key = sign_tx_access_key(
-            tx,
-            access_key_private_key=access_key.key.hex(),
-            root_account_address=funded_account.address,
+        gas_estimate_no_auth = w3.eth.estimate_gas(
+            tx2.to_estimate_gas_request(
+                funded_account.address, key_id=access_key.address
+            )
         )
-        receipt = send_tx(w3, signed_with_access_key)
-        assert receipt["status"] == 1
+
+        tx2 = TempoTransaction.create(
+            chain_id=chain_id,
+            nonce=1,
+            nonce_key=nonce_key,
+            gas_limit=gas_estimate_no_auth,
+            max_fee_per_gas=max_fee,
+            max_priority_fee_per_gas=priority_fee,
+            calls=(Call.create(to=COUNTER_CONTRACT, data=bytes.fromhex("d09de08a")),),
+        )
+
+        signed_tx2 = sign_tx_access_key(
+            tx2,
+            access_key_private_key=access_key.key.hex(),
+            root_account=funded_account.address,
+        )
+        receipt2 = send_tx(w3, signed_tx2)
+        assert receipt2["status"] == 1
 
 
 class TestSponsoredTransactions:
@@ -638,7 +747,7 @@ class TestSetUserFeeToken:
         tx1 = TempoTransaction.create(
             chain_id=chain_id,
             nonce=nonce,
-            gas_limit=BASE_GAS_LIMIT,
+            gas_limit=600_000,
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
             calls=(Call.create(to=FEE_CONTROLLER, data=set_calldata),),
@@ -655,7 +764,7 @@ class TestSetUserFeeToken:
         tx2 = TempoTransaction.create(
             chain_id=chain_id,
             nonce=nonce,
-            gas_limit=BASE_GAS_LIMIT,
+            gas_limit=600_000,
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
             calls=(Call.create(to=FEE_CONTROLLER, data=reset_calldata),),
