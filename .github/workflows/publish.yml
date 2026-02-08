@@ -16,6 +16,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Debug - test build
+        run: |
+          pip install build twine
+          python -m build
+          ls -la dist/
+          echo "--- twine check ---"
+          twine check dist/*
+
       - uses: wevm/changelogs@master
         with:
           ecosystem: python
