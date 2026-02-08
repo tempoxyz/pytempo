@@ -1,5 +1,6 @@
 [project]
-name = "pytempo"
+# TODO: Migrate package name back to "pytempo" once the name is reclaimed on PyPI
+name = "tempopy"
 version = "0.1.1"
 description = "Web3.py extension for Tempo blockchain - adds support for AA transactions and Tempo-specific features"
 readme = "README.md"
@@ -27,6 +28,10 @@ Documentation = "https://github.com/tempoxyz/pytempo#readme"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+# TODO: Remove once package is renamed back to "pytempo" on PyPI
+[tool.hatch.build.targets.wheel]
+packages = ["pytempo"]
 
 [tool.ruff]
 line-length = 88
