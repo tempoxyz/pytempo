@@ -29,6 +29,7 @@ Documentation = "https://github.com/tempoxyz/pytempo#readme"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+# TODO: Remove once package is renamed back to "pytempo" on PyPI
 [tool.hatch.build.targets.wheel]
 packages = ["pytempo"]
 
