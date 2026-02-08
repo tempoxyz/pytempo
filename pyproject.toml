@@ -1,5 +1,6 @@
 [project]
-name = "pytempo"
+# TODO: Migrate package name back to "pytempo" once the name is reclaimed on PyPI
+name = "tempopy"
 version = "0.1.1"
 description = "Web3.py extension for Tempo blockchain - adds support for AA transactions and Tempo-specific features"
 readme = "README.md"
