@@ -91,7 +91,7 @@ tx_hash = w3.eth.send_raw_transaction(tx.encode())
 receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
 ```
 
-## Typed API (v0.3.0+)
+## Typed API (v0.2.1+)
 
 The typed API provides immutable dataclasses with validation:
 

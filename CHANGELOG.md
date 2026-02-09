@@ -1,6 +1,6 @@
 # Changelog
 
-## `pytempo@0.2.0`
+## `pytempo@0.2.1`
 
 ### Minor Changes
 
