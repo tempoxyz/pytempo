@@ -1,5 +1,11 @@
 # Changelog
 
+## `pytempo@0.2.2`
+
+### Patch Changes
+
+- Renamed package from tempopy back to pytempo. (by @BrendanRyan, [#17](https://github.com/tempoxyz/pytempo/pull/17))
+
 ## `pytempo@0.2.1`
 
 ### Minor Changes
