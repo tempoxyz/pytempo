@@ -359,7 +359,7 @@ See the `examples/` directory:
 
 ## Contributing
 
-Our contributor guidelines can be found in [`CONTRIBUTING.md`](https://github.com/tempoxyz/tempo?tab=contributing-ov-file).
+Our contributor guidelines can be found in [`CONTRIBUTING.md`](https://github.com/tempoxyz/pytempo?tab=contributing-ov-file).
 
 ## Security
 
