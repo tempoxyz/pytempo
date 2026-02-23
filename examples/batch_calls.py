@@ -1,7 +1,7 @@
 """
 Example: Batch Multiple Calls
 
-This example shows how to batch multiple calls into a single transaction.
+Batch multiple calls into a single transaction.
 
 Usage:
     PRIVATE_KEY=0x... python examples/batch_calls.py
@@ -11,10 +11,7 @@ import os
 
 from web3 import Web3
 
-from pytempo import create_tempo_transaction, patch_web3_for_tempo
-
-# Patch web3 to support Tempo transactions
-patch_web3_for_tempo()
+from pytempo import Call, TempoTransaction
 
 # Connect to Tempo
 w3 = Web3(Web3.HTTPProvider("https://rpc.testnet.tempo.xyz"))
@@ -27,26 +24,27 @@ if not private_key:
 account = w3.eth.account.from_key(private_key)
 
 # Create transaction with multiple calls
-tx = create_tempo_transaction(
-    to="",  # Not used when calls are provided
-    calls=[
-        {"to": "0xF0109fC8DF283027b6285cc889F5aA624EaC1F55", "value": 0, "data": "0x"},
-        {"to": "0xF0109fC8DF283027b6285cc889F5aA624EaC1F55", "value": 0, "data": "0x"},
-        {"to": "0xF0109fC8DF283027b6285cc889F5aA624EaC1F55", "value": 0, "data": "0x"},
-    ],
-    gas=300000,
-    max_fee_per_gas=w3.eth.gas_price * 2 if w3.eth.gas_price else 2000000000,
-    max_priority_fee_per_gas=w3.eth.gas_price if w3.eth.gas_price else 2000000000,
-    nonce=w3.eth.get_transaction_count(account.address),
+tx = TempoTransaction.create(
     chain_id=w3.eth.chain_id,
+    gas_limit=300_000,
+    max_fee_per_gas=w3.eth.gas_price * 2 if w3.eth.gas_price else 2_000_000_000,
+    max_priority_fee_per_gas=w3.eth.gas_price if w3.eth.gas_price else 2_000_000_000,
+    nonce=w3.eth.get_transaction_count(account.address),
     fee_token="0x20c0000000000000000000000000000000000001",
+    calls=(
+        Call.create(to="0xF0109fC8DF283027b6285cc889F5aA624EaC1F55", value=0),
+        Call.create(to="0xF0109fC8DF283027b6285cc889F5aA624EaC1F55", value=0),
+        Call.create(to="0xF0109fC8DF283027b6285cc889F5aA624EaC1F55", value=0),
+    ),
 )
-tx.sign(private_key)
 
 print(f"Batching {len(tx.calls)} calls in one transaction")
 
+# Sign transaction (returns new instance)
+signed_tx = tx.sign(private_key)
+
 # Send transaction
-tx_hash = w3.eth.send_raw_transaction(tx.encode())
+tx_hash = w3.eth.send_raw_transaction(signed_tx.encode())
 print(f"Transaction hash: {tx_hash.hex()}")
 
 # Wait for confirmation

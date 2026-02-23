@@ -4,7 +4,8 @@ PyTempo - Web3.py extension for Tempo blockchain
 Extends web3.py with native support for Tempo transactions (Type 0x76)
 and other Tempo-specific features.
 
-Strongly-Typed API (Recommended):
+Usage::
+
     from pytempo import TempoTransaction, Call
 
     tx = TempoTransaction.create(
@@ -14,17 +15,7 @@ Strongly-Typed API (Recommended):
         calls=(Call.create(to="0xRecipient...", value=1000),),
     )
     signed_tx = tx.sign("0xPrivateKey...")
-
-    # Send raw bytes - no patching needed
     w3.eth.send_raw_transaction(signed_tx.encode())
-
-Legacy API (Backwards Compatible):
-    from pytempo import create_tempo_transaction, patch_web3_for_tempo
-
-    # Patch required if using web3's internal transaction parsing
-    patch_web3_for_tempo()
-    tx = create_tempo_transaction(to="0x...", value=1000, chain_id=42429)
-    tx.sign("0xPrivateKey...")
 """
 
 from .keychain import (
@@ -49,12 +40,6 @@ from .models import (
     Signature,
     TempoTransaction,
 )
-from .transaction import (
-    LegacyTempoTransaction,
-    TempoAATransaction,
-    create_tempo_transaction,
-    patch_web3_for_tempo,
-)
 from .types import (
     Address,
     BytesLike,
@@ -76,16 +61,11 @@ __all__ = [
     "as_bytes",
     "as_hash32",
     "as_optional_address",
-    # Models (strongly-typed API)
+    # Models
     "Call",
     "AccessListItem",
     "Signature",
     "TempoTransaction",
-    # Legacy API (backwards compatible)
-    "LegacyTempoTransaction",
-    "TempoAATransaction",
-    "create_tempo_transaction",
-    "patch_web3_for_tempo",
     # Keychain precompile
     "ACCOUNT_KEYCHAIN_ADDRESS",
     "GET_REMAINING_LIMIT_SELECTOR",
