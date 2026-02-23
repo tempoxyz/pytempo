@@ -93,13 +93,15 @@ def funded_account(w3, rpc_url):
     for _ in range(100):
         try:
             result = w3.provider.make_request("tempo_fundAddress", [account.address])
-            if isinstance(result.get("result"), list):
+            tx_hashes = result.get("result")
+            if isinstance(tx_hashes, list):
+                for tx_hash in tx_hashes:
+                    w3.eth.wait_for_transaction_receipt(tx_hash, timeout=60)
                 break
         except Exception:
             pass
         time.sleep(0.2)
 
-    time.sleep(5)
     return account
 
 
@@ -111,13 +113,15 @@ def sponsor_account(w3, rpc_url):
     for _ in range(100):
         try:
             result = w3.provider.make_request("tempo_fundAddress", [account.address])
-            if isinstance(result.get("result"), list):
+            tx_hashes = result.get("result")
+            if isinstance(tx_hashes, list):
+                for tx_hash in tx_hashes:
+                    w3.eth.wait_for_transaction_receipt(tx_hash, timeout=60)
                 break
         except Exception:
             pass
         time.sleep(0.2)
 
-    time.sleep(3)
     return account
 
 
