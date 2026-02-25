@@ -401,36 +401,21 @@ def build_keychain_signature(
 def sign_tx_access_key(tx, access_key_private_key: str, root_account: str):
     """Sign a Tempo transaction using access key mode (Keychain signature).
 
-    For immutable TempoTransaction (attrs): returns a new transaction with signature.
-    For mutable LegacyTempoTransaction: mutates in place and returns the same tx.
+    Returns a new TempoTransaction with the keychain signature applied.
 
     Args:
-        tx: TempoTransaction or LegacyTempoTransaction to sign
+        tx: TempoTransaction to sign
         access_key_private_key: Private key of the access key (hex string with 0x prefix)
         root_account: Address of the root account (hex string with 0x prefix)
 
     Returns:
-        Transaction with the keychain signature applied
+        New TempoTransaction with the keychain signature applied
     """
     import attrs
 
-    # Check if this is an attrs class (immutable TempoTransaction)
-    if attrs.has(type(tx)):
-        # Immutable: use attrs.evolve to create new instances
-        tx_with_sender = attrs.evolve(tx, sender_address=to_bytes(hexstr=root_account))
-        msg_hash = tx_with_sender.get_signing_hash(for_fee_payer=False)
-        keychain_sig = build_keychain_signature(
-            msg_hash, access_key_private_key, root_account
-        )
-        return attrs.evolve(tx_with_sender, sender_signature=keychain_sig)
-    else:
-        # Mutable LegacyTempoTransaction: mutate in place
-        tx.sender_address = to_bytes(hexstr=root_account)
-        msg_hash = tx.get_signing_hash(for_fee_payer=False)
-        tx.signature = build_keychain_signature(
-            msg_hash, access_key_private_key, root_account
-        )
-        tx.v = None
-        tx.r = None
-        tx.s = None
-        return tx
+    tx_with_sender = attrs.evolve(tx, sender_address=to_bytes(hexstr=root_account))
+    msg_hash = tx_with_sender.get_signing_hash(for_fee_payer=False)
+    keychain_sig = build_keychain_signature(
+        msg_hash, access_key_private_key, root_account
+    )
+    return attrs.evolve(tx_with_sender, sender_signature=keychain_sig)

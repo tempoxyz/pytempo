@@ -30,7 +30,6 @@ from pytempo import (
     KeyAuthorization,
     SignatureType,
     TempoTransaction,
-    patch_web3_for_tempo,
     sign_tx_access_key,
 )
 
@@ -74,9 +73,7 @@ def rpc_url():
 @pytest.fixture(scope="module")
 def w3(rpc_url):
     """Create a Web3 instance connected to the Tempo node."""
-    web3 = Web3(Web3.HTTPProvider(rpc_url))
-    patch_web3_for_tempo()
-    return web3
+    return Web3(Web3.HTTPProvider(rpc_url))
 
 
 @pytest.fixture(scope="module")
