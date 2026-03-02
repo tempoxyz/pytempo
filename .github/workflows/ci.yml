@@ -153,7 +153,7 @@ jobs:
       - name: Run integration tests against devnet
         run: uv run pytest -v -s tests/test_integration.py
         env:
-          TEMPO_RPC_URL: ${{ secrets.DEVNET_RPC_URL }}
+          TEMPO_RPC_URL: ${{ secrets.TEMPO_DEVNET_RPC_URL }}
 
   integration-testnet:
     name: Integration Tests (Testnet)
@@ -177,4 +177,4 @@ jobs:
       - name: Run integration tests against testnet
         run: uv run pytest -v -s tests/test_integration.py
         env:
-          TEMPO_RPC_URL: ${{ secrets.TESTNET_RPC_URL }}
+          TEMPO_RPC_URL: ${{ secrets.TEMPO_TESTNET_RPC_URL }}
