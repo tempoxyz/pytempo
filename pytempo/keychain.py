@@ -3,20 +3,21 @@
 The AccountKeychain precompile manages access key authorizations and spending limits.
 Access keys allow a separate key to sign transactions on behalf of a wallet.
 
-Per Tempo spec, Keychain signatures have format:
+Per Tempo spec, Keychain signatures have format::
+
     0x03 || user_address (20 bytes) || inner_signature (65 bytes)
 
 Where:
+
 - 0x03 is the Keychain signature type identifier
 - user_address is the root account (the account the access key signs on behalf of)
 - inner_signature is the secp256k1 signature from the access key (r || s || v)
 
-Total signature length: 86 bytes
+Total signature length: 86 bytes.
 
-KeyAuthorization:
-    Used to provision access keys inline within a Tempo transaction.
-    The authorization is RLP-encoded and signed by the root account.
-    Format: [chain_id, key_type, key_id, expiry?, limits?]
+KeyAuthorization is used to provision access keys inline within a Tempo transaction.
+The authorization is RLP-encoded and signed by the root account.
+Format: ``[chain_id, key_type, key_id, expiry?, limits?]``
 """
 
 from dataclasses import dataclass
@@ -276,8 +277,8 @@ def create_key_authorization(
         chain_id: Chain ID for replay protection (0 = valid on any chain)
         key_type: Signature type (default: SECP256K1)
         expiry: Unix timestamp when key expires (None = never expires)
-        limits: List of token limits as dicts with 'token' and 'limit' keys
-                (None = unlimited, [] = no spending)
+        limits: List of token limits as dicts with ``token`` and ``limit`` keys.
+            Use ``None`` for unlimited or ``[]`` for no spending.
 
     Returns:
         KeyAuthorization that can be signed by the root account

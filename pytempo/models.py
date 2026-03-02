@@ -178,6 +178,7 @@ class TempoTransaction:
     An immutable, strongly-typed representation of a Tempo transaction.
 
     Features:
+
     - Four signature types: secp256k1, P256, WebAuthn, Keychain
     - 2D nonce system for parallel transactions
     - Gas sponsorship via fee payer
@@ -186,7 +187,8 @@ class TempoTransaction:
     - Transaction expiry windows
     - Access keys with spending limits
 
-    Example:
+    Example::
+
         tx = TempoTransaction.create(
             chain_id=42429,
             gas_limit=100_000,
