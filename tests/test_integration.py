@@ -17,6 +17,7 @@ Coverage parity with tempo-foundry's tempo-check.sh:
 """
 
 import os
+import re
 import time
 
 import pytest
@@ -80,6 +81,29 @@ def w3(rpc_url):
 def chain_id(w3):
     """Get the chain ID from the connected node."""
     return w3.eth.chain_id
+
+
+def _parse_node_version(version_string: str) -> tuple[int, ...]:
+    """Parse a semver version from a Tempo client version string.
+
+    Example: "tempo/v1.3.1-e988785/x86_64-unknown-linux-gnu" -> (1, 3, 1)
+    """
+    match = re.search(r"v(\d+\.\d+\.\d+)", version_string)
+    if not match:
+        return (0, 0, 0)
+    return tuple(int(x) for x in match.group(1).split("."))
+
+
+@pytest.fixture(scope="module")
+def supports_keychain_v2(w3):
+    """Check if the node supports Keychain V2 signatures (0x04).
+
+    V2 keychain support was added in v1.0.0. Older nodes (e.g. testnet
+    running v0.8.x) only understand V1 (0x03) and will fail to decode
+    transactions signed with V2 keychain signatures.
+    """
+    version = w3.client_version
+    return _parse_node_version(version) >= (1, 0, 0)
 
 
 @pytest.fixture(scope="class")
@@ -372,12 +396,18 @@ class TestAccessKeys:
     inline within a transaction, avoiding a separate on-chain authorizeKey call.
     """
 
-    def test_add_access_key_with_key_authorization(self, w3, chain_id, funded_account):
+    def test_add_access_key_with_key_authorization(
+        self, w3, chain_id, funded_account, supports_keychain_v2
+    ):
         """Test adding a new access key via inline KeyAuthorization.
 
         Uses KeyAuthorization to provision an access key in the same transaction
         that first uses it (key_authorization field).
         """
+        if not supports_keychain_v2:
+            pytest.skip(
+                "Node does not support Keychain V2 signatures (requires >= v1.0.0)"
+            )
         max_fee, priority_fee = get_gas_params(w3)
 
         access_key = Account.create()
@@ -435,12 +465,18 @@ class TestAccessKeys:
         receipt = send_tx(w3, signed_tx)
         assert receipt["status"] == 1
 
-    def test_sign_tx_with_existing_access_key(self, w3, chain_id, funded_account):
+    def test_sign_tx_with_existing_access_key(
+        self, w3, chain_id, funded_account, supports_keychain_v2
+    ):
         """Test signing a transaction with an already-authorized access key.
 
         First provisions the access key inline, then uses that same key
         for a subsequent transaction without needing a new authorization.
         """
+        if not supports_keychain_v2:
+            pytest.skip(
+                "Node does not support Keychain V2 signatures (requires >= v1.0.0)"
+            )
         max_fee, priority_fee = get_gas_params(w3)
 
         access_key = Account.create()
