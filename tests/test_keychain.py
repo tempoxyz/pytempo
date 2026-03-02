@@ -188,8 +188,8 @@ class TestKeychainSignatureFormat:
         assert len(signed.sender_signature) == KEYCHAIN_SIGNATURE_LENGTH
         assert len(signed.sender_signature) == 86
 
-    def test_signature_starts_with_0x03(self):
-        """First byte must be 0x03 (Keychain type identifier)."""
+    def test_signature_starts_with_0x04(self):
+        """First byte must be 0x04 (Keychain V2 type identifier)."""
         access_key_private = "0x" + "a" * 64
         root_account = "0x" + "b" * 40
 
@@ -203,7 +203,7 @@ class TestKeychainSignatureFormat:
         signed = sign_tx_access_key(tx, access_key_private, root_account)
 
         assert signed.sender_signature[0] == KEYCHAIN_SIGNATURE_TYPE
-        assert signed.sender_signature[0] == 0x03
+        assert signed.sender_signature[0] == 0x04
 
     def test_root_account_embedded_in_signature(self):
         """Bytes 1-21 must contain the root account address."""
@@ -281,7 +281,7 @@ class TestKeychainVsNormalSigning:
         assert len(normal_signed.sender_signature.to_bytes()) == 65  # Normal secp256k1
 
     def test_different_type_prefix(self):
-        """Keychain starts with 0x03, normal doesn't."""
+        """Keychain starts with 0x04, normal doesn't."""
         access_key_private = "0x" + "a" * 64
         root_account = "0x" + "b" * 40
 
@@ -295,8 +295,8 @@ class TestKeychainVsNormalSigning:
         keychain_signed = sign_tx_access_key(tx, access_key_private, root_account)
         normal_signed = tx.sign(access_key_private)
 
-        assert keychain_signed.sender_signature[0] == 0x03
-        assert normal_signed.sender_signature.to_bytes()[0] != 0x03
+        assert keychain_signed.sender_signature[0] == 0x04
+        assert normal_signed.sender_signature.to_bytes()[0] != 0x04
 
     def test_encoded_transactions_different(self):
         """Encoded transactions should be different."""
