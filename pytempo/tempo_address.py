@@ -21,98 +21,61 @@ Example::
     assert parsed.address == addr.address
 """
 
-from collections.abc import Sequence
 from typing import Optional
 
 import attrs
+from bech32 import CHARSET, bech32_hrp_expand, bech32_polymod, convertbits
 
 from .types import Address, as_address
 
 # ---------------------------------------------------------------------------
-# Bech32m (BIP-350) — pure-Python implementation
+# Bech32m (BIP-350) — using ``bech32`` PyPI package primitives with the
+# bech32m checksum constant (0x2BC830A3) per BIP-350.
 # ---------------------------------------------------------------------------
 
-_CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
 _BECH32M_CONST = 0x2BC830A3
 
 
-def _bech32_polymod(values: Sequence[int]) -> int:
-    """Internal polynomial modular checksum."""
-    GEN = [0x3B6A57B2, 0x26508E6D, 0x1EA119FA, 0x3D4233DD, 0x2A1462B3]
-    chk = 1
-    for v in values:
-        top = chk >> 25
-        chk = ((chk & 0x1FFFFFF) << 5) ^ v
-        for i in range(5):
-            chk ^= GEN[i] if ((top >> i) & 1) else 0
-    return chk
+def _bech32m_verify_checksum(hrp: str, data: list[int]) -> bool:
+    return bech32_polymod(bech32_hrp_expand(hrp) + data) == _BECH32M_CONST
 
 
-def _bech32_hrp_expand(hrp: str) -> list[int]:
-    """Expand the HRP into values for checksum computation."""
-    return [ord(x) >> 5 for x in hrp] + [0] + [ord(x) & 31 for x in hrp]
-
-
-def _bech32_verify_checksum(hrp: str, data: list[int]) -> bool:
-    return _bech32_polymod(_bech32_hrp_expand(hrp) + data) == _BECH32M_CONST
-
-
-def _bech32_create_checksum(hrp: str, data: list[int]) -> list[int]:
-    values = _bech32_hrp_expand(hrp) + data
-    polymod = _bech32_polymod(values + [0, 0, 0, 0, 0, 0]) ^ _BECH32M_CONST
+def _bech32m_create_checksum(hrp: str, data: list[int]) -> list[int]:
+    values = bech32_hrp_expand(hrp) + data
+    polymod = bech32_polymod(values + [0, 0, 0, 0, 0, 0]) ^ _BECH32M_CONST
     return [(polymod >> 5 * (5 - i)) & 31 for i in range(6)]
-
-
-def _convertbits(
-    data: Sequence[int], frombits: int, tobits: int, pad: bool = True
-) -> list[int]:
-    """General power-of-2 base conversion."""
-    acc = 0
-    bits = 0
-    ret: list[int] = []
-    maxv = (1 << tobits) - 1
-    for value in data:
-        if value < 0 or (value >> frombits):
-            raise ValueError(f"invalid value for convertbits: {value}")
-        acc = (acc << frombits) | value
-        bits += frombits
-        while bits >= tobits:
-            bits -= tobits
-            ret.append((acc >> bits) & maxv)
-    if pad:
-        if bits:
-            ret.append((acc << (tobits - bits)) & maxv)
-    elif bits >= frombits or ((acc << (tobits - bits)) & maxv):
-        raise ValueError("invalid padding in convertbits")
-    return ret
 
 
 def _bech32m_encode(hrp: str, data_bytes: bytes) -> str:
     """Encode *data_bytes* as a bech32m string with the given HRP."""
-    data5 = _convertbits(list(data_bytes), 8, 5, pad=True)
-    checksum = _bech32_create_checksum(hrp, data5)
-    return hrp + "1" + "".join(_CHARSET[d] for d in data5 + checksum)
+    data5 = convertbits(list(data_bytes), 8, 5, pad=True)
+    if data5 is None:
+        raise ValueError("convertbits failed during encode")
+    combined = data5 + _bech32m_create_checksum(hrp, data5)
+    return hrp + "1" + "".join(CHARSET[d] for d in combined)
 
 
-def _bech32m_decode(bech: str) -> tuple:
+def _bech32m_decode(bech_str: str) -> tuple:
     """Decode a bech32m string.  Returns ``(hrp, data_bytes)``."""
-    bech_lower = bech.lower()
-    if bech_lower != bech and bech.upper() != bech:
+    bech_lower = bech_str.lower()
+    if bech_lower != bech_str and bech_str.upper() != bech_str:
         raise ValueError("mixed case in bech32m string")
-    bech = bech_lower
-    pos = bech.rfind("1")
-    if pos < 1 or pos + 7 > len(bech):
+    bech_str = bech_lower
+    pos = bech_str.rfind("1")
+    if pos < 1 or pos + 7 > len(bech_str):
         raise ValueError("invalid bech32m separator position")
-    hrp = bech[:pos]
-    data5 = []
-    for ch in bech[pos + 1 :]:
-        idx = _CHARSET.find(ch)
+    hrp = bech_str[:pos]
+    data5: list[int] = []
+    for ch in bech_str[pos + 1 :]:
+        idx = CHARSET.find(ch)
         if idx < 0:
             raise ValueError(f"invalid bech32m character: {ch!r}")
         data5.append(idx)
-    if not _bech32_verify_checksum(hrp, data5):
+    if not _bech32m_verify_checksum(hrp, data5):
         raise ValueError("invalid bech32m checksum")
-    data8 = _convertbits(data5[:-6], 5, 8, pad=False)
+    data8 = convertbits(data5[:-6], 5, 8, pad=False)
+    if data8 is None:
+        raise ValueError("convertbits failed during decode")
     return hrp, bytes(data8)
 
 
