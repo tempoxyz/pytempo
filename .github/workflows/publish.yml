@@ -15,10 +15,13 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
 
       - uses: wevm/changelogs@master
         with:
           ecosystem: python
+          python-version: '3.12'
           pypi-token: ${{ secrets.PYPI_TOKEN }}
           conventional-commit: true
         env:
