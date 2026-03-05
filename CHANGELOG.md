@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1 (2026-03-04)
+
+- Bumped to make the library publishable. Thanks PyPI.
+
 ## 0.3.0 (2026-03-03)
 
 ### Minor Changes
@@ -19,4 +23,3 @@
 ### Minor Changes
 
 - Initial release of pytempo - Web3.py extension for Tempo blockchain with support for AA transactions and Tempo-specific features. (by @BrendanRyan, [#14](https://github.com/tempoxyz/pytempo/pull/14))
-
