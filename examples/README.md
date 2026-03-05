@@ -26,6 +26,14 @@ Demonstrates batching multiple calls into a single transaction.
 PRIVATE_KEY=0xYourPrivateKeyHere python examples/batch_calls.py
 ```
 
+### `tempo_address.py` - Tempo Address Encoding
+
+Encode, decode, and validate Tempo bech32m addresses.
+
+```bash
+python examples/tempo_address.py
+```
+
 ## Notes
 
 - All examples connect to Tempo devnet

@@ -255,6 +255,15 @@ wheels = [
 ]
 
 [[package]]
+name = "bech32m"
+version = "1.0.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/46/ed/8c6b50cf7060693f10ba3a8f65e2141aec1aa490908b871de7ed018bc548/bech32m-1.0.0.tar.gz", hash = "sha256:6198dbf267d7d5e1a7a24e0825d9143fa4aaa886ec44a11df95fa3d5e38cb3c2", size = 14520, upload-time = "2023-06-14T14:51:08.343Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/aa/4e/947c9f52227bffd4c5923a749c7aff748c8f405135fca9d321ae02e5e345/bech32m-1.0.0-py3-none-any.whl", hash = "sha256:c44a2028b22e1d305a1803b3a811dce3e8ac1d8ec487b0c5e39447477dda70d4", size = 4941, upload-time = "2023-06-14T14:51:06.716Z" },
+]
+
+[[package]]
 name = "bitarray"
 version = "3.8.0"
 source = { registry = "https://pypi.org/simple" }
@@ -913,7 +922,7 @@ name = "exceptiongroup"
 version = "1.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
+    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/50/79/66800aadf48771f6b62f7eb014e352e5d06856655206165d775e675a02c9/exceptiongroup-1.3.1.tar.gz", hash = "sha256:8b412432c6055b0b7d14c310000ae93352ed6754f70fa8f7c34141f91c4e3219", size = 30371, upload-time = "2025-11-21T23:01:54.787Z" }
 wheels = [
@@ -1897,10 +1906,11 @@ wheels = [
 
 [[package]]
 name = "pytempo"
-version = "0.2.1"
+version = "0.3.1"
 source = { editable = "." }
 dependencies = [
     { name = "attrs" },
+    { name = "bech32m" },
     { name = "eth-account" },
     { name = "eth-utils" },
     { name = "rlp" },
@@ -1932,6 +1942,7 @@ docs = [
 [package.metadata]
 requires-dist = [
     { name = "attrs", specifier = ">=23.0.0" },
+    { name = "bech32m", specifier = ">=1.0.0" },
     { name = "eth-account", specifier = ">=0.11.0" },
     { name = "eth-utils", specifier = ">=4.0.0" },
     { name = "rlp", specifier = ">=4.0.0" },
