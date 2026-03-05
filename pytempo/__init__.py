@@ -40,6 +40,7 @@ from .models import (
     Signature,
     TempoTransaction,
 )
+from .tempo_address import TempoAddress
 from .types import (
     Address,
     BytesLike,
@@ -66,6 +67,7 @@ __all__ = [
     "AccessListItem",
     "Signature",
     "TempoTransaction",
+    "TempoAddress",
     # Keychain precompile
     "ACCOUNT_KEYCHAIN_ADDRESS",
     "GET_REMAINING_LIMIT_SELECTOR",
