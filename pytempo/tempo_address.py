@@ -24,60 +24,9 @@ Example::
 from typing import Optional
 
 import attrs
-from bech32 import CHARSET, bech32_hrp_expand, bech32_polymod, convertbits
+from bech32m.codecs import Encoding, bech32_decode, bech32_encode, convertbits
 
 from .types import Address, as_address
-
-# ---------------------------------------------------------------------------
-# Bech32m (BIP-350) — using ``bech32`` PyPI package primitives with the
-# bech32m checksum constant (0x2BC830A3) per BIP-350.
-# ---------------------------------------------------------------------------
-
-_BECH32M_CONST = 0x2BC830A3
-
-
-def _bech32m_verify_checksum(hrp: str, data: list[int]) -> bool:
-    return bech32_polymod(bech32_hrp_expand(hrp) + data) == _BECH32M_CONST
-
-
-def _bech32m_create_checksum(hrp: str, data: list[int]) -> list[int]:
-    values = bech32_hrp_expand(hrp) + data
-    polymod = bech32_polymod(values + [0, 0, 0, 0, 0, 0]) ^ _BECH32M_CONST
-    return [(polymod >> 5 * (5 - i)) & 31 for i in range(6)]
-
-
-def _bech32m_encode(hrp: str, data_bytes: bytes) -> str:
-    """Encode *data_bytes* as a bech32m string with the given HRP."""
-    data5 = convertbits(list(data_bytes), 8, 5, pad=True)
-    if data5 is None:
-        raise ValueError("convertbits failed during encode")
-    combined = data5 + _bech32m_create_checksum(hrp, data5)
-    return hrp + "1" + "".join(CHARSET[d] for d in combined)
-
-
-def _bech32m_decode(bech_str: str) -> tuple:
-    """Decode a bech32m string.  Returns ``(hrp, data_bytes)``."""
-    bech_lower = bech_str.lower()
-    if bech_lower != bech_str and bech_str.upper() != bech_str:
-        raise ValueError("mixed case in bech32m string")
-    bech_str = bech_lower
-    pos = bech_str.rfind("1")
-    if pos < 1 or pos + 7 > len(bech_str):
-        raise ValueError("invalid bech32m separator position")
-    hrp = bech_str[:pos]
-    data5: list[int] = []
-    for ch in bech_str[pos + 1 :]:
-        idx = CHARSET.find(ch)
-        if idx < 0:
-            raise ValueError(f"invalid bech32m character: {ch!r}")
-        data5.append(idx)
-    if not _bech32m_verify_checksum(hrp, data5):
-        raise ValueError("invalid bech32m checksum")
-    data8 = convertbits(data5[:-6], 5, 8, pad=False)
-    if data8 is None:
-        raise ValueError("convertbits failed during decode")
-    return hrp, bytes(data8)
-
 
 # ---------------------------------------------------------------------------
 # CompactSize (Bitcoin varint, little-endian)
@@ -183,7 +132,8 @@ class TempoAddress:
         for addresses with a ``zone_id``.
         """
         hrp = HRP_ZONE if self.zone_id is not None else HRP_MAINNET
-        return _bech32m_encode(hrp, self._payload())
+        data5 = convertbits(self._payload(), 8, 5)
+        return bech32_encode(hrp, bytes(data5), Encoding.BECH32M)
 
     @classmethod
     def parse(cls, s: str) -> "TempoAddress":
@@ -198,7 +148,13 @@ class TempoAddress:
         Raises:
             ValueError: If the string is not a valid Tempo bech32m address.
         """
-        hrp, payload = _bech32m_decode(s)
+        try:
+            hrp, data5, spec = bech32_decode(s)
+        except Exception as exc:
+            raise ValueError(f"invalid bech32m string: {exc}") from exc
+        if spec != Encoding.BECH32M:
+            raise ValueError("not a bech32m string")
+        payload = bytes(convertbits(data5, 5, 8, pad=False))
 
         if hrp not in (HRP_MAINNET, HRP_ZONE):
             raise ValueError(
@@ -344,7 +300,8 @@ def test_parse_bad_version() -> None:
     ta = TempoAddress(address=_TEST_RAW)
     # Manually encode with version=1
     bad_payload = b"\x01" + bytes(ta.address)
-    bad_bech = _bech32m_encode(HRP_MAINNET, bad_payload)
+    data5 = convertbits(bad_payload, 8, 5)
+    bad_bech = bech32_encode(HRP_MAINNET, bytes(data5), Encoding.BECH32M)
     with pytest.raises(ValueError, match="unsupported version"):
         TempoAddress.parse(bad_bech)
 
