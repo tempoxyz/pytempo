@@ -1,9 +1,11 @@
 """Sphinx configuration for pytempo."""
 
+from pytempo import __version__
+
 project = "pytempo"
 copyright = "2025, Tempo"
 author = "Tempo"
-release = "0.3.0"
+release = __version__
 
 extensions = [
     "sphinx.ext.autodoc",
