@@ -259,7 +259,10 @@ class TestFeeTokens:
         for token in [ALPHA_USD, BETA_USD, THETA_USD]:
             calldata = selector + encode(
                 ["address", "address"],
-                [Web3.to_checksum_address(token), Web3.to_checksum_address(NATIVE_FEE_TOKEN)],
+                [
+                    Web3.to_checksum_address(token),
+                    Web3.to_checksum_address(NATIVE_FEE_TOKEN),
+                ],
             )
 
             result = w3.eth.call({"to": FEE_CONTROLLER, "data": "0x" + calldata.hex()})
