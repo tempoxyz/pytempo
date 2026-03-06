@@ -59,37 +59,8 @@ signed_tx = tx.sign("0xYourPrivateKey...")
 tx_hash = w3.eth.send_raw_transaction(signed_tx.encode())
 ```
 
-### Legacy API (Backwards Compatible)
-
-```python
-from pytempo import patch_web3_for_tempo, create_tempo_transaction
-from web3 import Web3
-
-# Step 1: Patch web3.py to add Tempo support
-# (Only needed if using web3's internal transaction parsing)
-patch_web3_for_tempo()
-
-# Step 2: Use web3.py normally with Tempo features
-w3 = Web3(Web3.HTTPProvider("https://rpc.testnet.tempo.xyz"))
-account = w3.eth.account.from_key("0x...")
-
-# Step 3: Create Tempo AA transaction (Type 0x76)
-tx = create_tempo_transaction(
-    to="0xRecipient...",
-    value=0,
-    gas=100000,
-    max_fee_per_gas=w3.eth.gas_price * 2,
-    max_priority_fee_per_gas=w3.eth.gas_price,
-    nonce=w3.eth.get_transaction_count(account.address),
-    chain_id=w3.eth.chain_id,
-    fee_token="0x20c0000000000000000000000000000000000001", # AlphaUSD
-)
-
-# Step 4: Sign and send using standard web3.py
-tx.sign(account.key.hex())
-tx_hash = w3.eth.send_raw_transaction(tx.encode())
-receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-```
+The legacy API (`create_tempo_transaction`, `patch_web3_for_tempo`) was removed in
+`v0.3.0`. Use the typed API shown above.
 
 ## Typed API (v0.2.1+)
 
@@ -150,42 +121,6 @@ h = as_hash32("0x" + "ab" * 32)  # -> bytes (32)
 
 # Convert hex strings to bytes
 data = as_bytes("0xabcdef")  # -> b'\xab\xcd\xef'
-```
-
-## Legacy Usage
-
-### Basic Transaction
-
-```python
-from pytempo import create_tempo_transaction
-
-tx = create_tempo_transaction(
-    to="0xRecipient...",
-    value=1000000000000000,
-    gas=100000,
-    max_fee_per_gas=2000000000,
-    max_priority_fee_per_gas=2000000000,
-    nonce=0,
-    chain_id=42429,
-)
-
-tx.sign("0xYourPrivateKey...")
-encoded = tx.encode()
-```
-
-### With Custom Fee Token
-
-```python
-tx = create_tempo_transaction(
-    to="0xRecipient...",
-    value=0,
-    fee_token="0xTokenAddress...",  # Pay gas in this ERC-20 token
-    gas=100000,
-    max_fee_per_gas=2000000000,
-    max_priority_fee_per_gas=2000000000,
-    nonce=0,
-    chain_id=42429,
-)
 ```
 
 ### Gas Sponsorship
@@ -313,32 +248,6 @@ EIP-2930 access list entry.
 
 - `AccessListItem.create(address, storage_keys=())` - Create with type coercion
 
-### `patch_web3_for_tempo()`
-
-Monkey patches web3.py to recognize Tempo AA transactions. **Must be called before using web3**.
-
-### `create_tempo_transaction(...)` (Legacy)
-
-Creates a mutable Tempo AA transaction.
-
-**Parameters:**
-
-- `to` (str): Destination address
-- `value` (int): Value in wei (default: 0)
-- `gas` (int): Gas limit
-- `max_fee_per_gas` (int): Maximum fee per gas
-- `max_priority_fee_per_gas` (int): Maximum priority fee per gas
-- `nonce` (int): Transaction nonce
-- `chain_id` (int): Chain ID
-- `nonce_key` (int): Nonce key for parallel execution (default: 0)
-- `fee_token` (str, optional): ERC-20 token address for gas payment
-- `calls` (list, optional): List of calls for batching
-- `data` (str, optional): Transaction data
-- `valid_before` (int, optional): Timestamp before which tx is valid
-- `valid_after` (int, optional): Timestamp after which tx becomes valid
-
-**Returns:** `LegacyTempoTransaction`
-
 ## Development
 
 ```bash
@@ -354,8 +263,7 @@ make check    # Run all checks (lint + format-check + test)
 See the `examples/` directory:
 
 - `simple_send.py` - Simple value transfer
-- `basic_transaction.py` - Transaction with fee token
-- `fee_payer_sponsored.py` - Gas sponsorship and call batching
+- `batch_calls.py` - Batch multiple calls
 
 ## Contributing
 
