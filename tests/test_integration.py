@@ -20,7 +20,7 @@ import os
 import time
 
 import pytest
-from eth_abi import decode, encode
+from eth_abi import encode
 from eth_account import Account
 from eth_utils import function_signature_to_4byte_selector
 from web3 import Web3
@@ -252,41 +252,26 @@ class TestTransactionSubmission:
 class TestFeeTokens:
     """Test fee token operations (tempo-check.sh fee token tests)."""
 
-    def test_fee_token_liquidity_exists(self, w3):
-        """Verify genesis-seeded FeeAMM liquidity exists for fee tokens."""
-        selector = function_signature_to_4byte_selector("getPool(address,address)")
+    def test_fee_token_liquidity_exists(self, w3, chain_id, funded_account):
+        """Verify FeeAMM liquidity exists by sending a tx with each fee token."""
+        max_fee, priority_fee = get_gas_params(w3)
 
         for token in [ALPHA_USD, BETA_USD, THETA_USD]:
-            calldata = selector + encode(
-                ["address", "address"],
-                [
-                    Web3.to_checksum_address(token),
-                    Web3.to_checksum_address(NATIVE_FEE_TOKEN),
-                ],
+            nonce = w3.eth.get_transaction_count(funded_account.address)
+            tx = TempoTransaction.create(
+                chain_id=chain_id,
+                nonce=nonce,
+                gas_limit=BASE_GAS_LIMIT,
+                max_fee_per_gas=max_fee,
+                max_priority_fee_per_gas=priority_fee,
+                fee_token=token,
+                calls=(
+                    Call.create(to=COUNTER_CONTRACT, data=bytes.fromhex("d09de08a")),
+                ),
             )
-
-            result = w3.eth.call({"to": FEE_CONTROLLER, "data": "0x" + calldata.hex()})
-            reserve_user, reserve_validator = decode(["uint128", "uint128"], result)
-            assert reserve_user > 0, f"reserve_user_token is zero for {token}"
-            assert reserve_validator > 0, f"reserve_validator_token is zero for {token}"
-
-    def test_send_with_fee_token(self, w3, chain_id, funded_account):
-        """Test sending transaction with custom fee token."""
-        max_fee, priority_fee = get_gas_params(w3)
-        nonce = w3.eth.get_transaction_count(funded_account.address)
-
-        tx = TempoTransaction.create(
-            chain_id=chain_id,
-            nonce=nonce,
-            gas_limit=BASE_GAS_LIMIT,
-            max_fee_per_gas=max_fee,
-            max_priority_fee_per_gas=priority_fee,
-            fee_token=BETA_USD,
-            calls=(Call.create(to=COUNTER_CONTRACT, data=bytes.fromhex("d09de08a")),),
-        )
-        signed = tx.sign(funded_account.key.hex())
-        receipt = send_tx(w3, signed)
-        assert receipt["status"] == 1
+            signed = tx.sign(funded_account.key.hex())
+            receipt = send_tx(w3, signed)
+            assert receipt["status"] == 1
 
 
 class TestTwoNonces:
