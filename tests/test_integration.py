@@ -155,6 +155,22 @@ def send_tx(w3, tx: TempoTransaction, timeout: int = 60) -> dict:
     return receipt
 
 
+def wait_for_next_block(w3, timeout: int = 30) -> None:
+    """Wait until at least one new block is produced.
+
+    Useful when the RPC service is load-balanced across multiple nodes:
+    after a state-changing transaction is confirmed, a subsequent request may
+    hit a different backend whose ``latest()`` state hasn't caught up yet.
+    Waiting for a new block gives all nodes time to import the previous one.
+    """
+    start_block = w3.eth.block_number
+    deadline = time.time() + timeout
+    while w3.eth.block_number <= start_block:
+        if time.time() > deadline:
+            raise TimeoutError("Timed out waiting for next block")
+        time.sleep(0.25)
+
+
 def get_gas_params(w3) -> tuple[int, int]:
     """Get current gas parameters from the network."""
     gas_price = w3.eth.gas_price
@@ -500,6 +516,10 @@ class TestAccessKeys:
         )
         receipt1 = send_tx(w3, signed_tx1)
         assert receipt1["status"] == 1
+
+        # Wait for the next block so all nodes behind the load-balanced RPC
+        # service have imported the block that provisioned the access key.
+        wait_for_next_block(w3)
 
         # Build second tx and estimate gas (just keychain signature, no key_authorization)
         tx2 = TempoTransaction.create(
