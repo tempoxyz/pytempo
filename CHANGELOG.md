@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.2 (2026-03-10)
+
+### Patch Changes
+
+- Fixed a test race condition in `TestAccessKeys` by waiting for block propagation before reusing an access key, ensuring load-balanced RPC nodes have imported the provisioning block. (by @DerekCofausper, [#35](https://github.com/tempoxyz/pytempo/pull/35))
+
 ## 0.3.1 (2026-03-04)
 
 - Bumped to make the library publishable. Thanks PyPI.
