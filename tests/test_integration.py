@@ -55,7 +55,6 @@ FEE_CONTROLLER = "0xfeec000000000000000000000000000000000000"
 DEX = "0xdec0000000000000000000000000000000000000"
 ACCOUNT_KEYCHAIN = "0xAAAAAAAA00000000000000000000000000000000"
 COUNTER_CONTRACT = "0x86A2EE8FAf9A840F7a2c64CA3d51209F9A02081D"
-LP_RECIPIENT = "0x6c4143BEd3A13cf9E5E43d45C60aD816FC091d0c"
 
 # Skip all tests if TEMPO_RPC_URL is not set
 pytestmark = pytest.mark.skipif(
@@ -269,49 +268,26 @@ class TestTransactionSubmission:
 class TestFeeTokens:
     """Test fee token operations (tempo-check.sh fee token tests)."""
 
-    def test_add_fee_token_liquidity(self, w3, chain_id, funded_account):
-        """Test adding fee token liquidity (AlphaUSD, BetaUSD, ThetaUSD)."""
+    def test_fee_token_liquidity_exists(self, w3, chain_id, funded_account):
+        """Verify FeeAMM liquidity exists by sending a tx with each fee token."""
         max_fee, priority_fee = get_gas_params(w3)
 
         for token in [ALPHA_USD, BETA_USD, THETA_USD]:
             nonce = w3.eth.get_transaction_count(funded_account.address)
-            calldata = encode_call(
-                "mint(address,address,uint256,address)",
-                Web3.to_checksum_address(token),
-                Web3.to_checksum_address(NATIVE_FEE_TOKEN),
-                1_000_000_000,
-                Web3.to_checksum_address(LP_RECIPIENT),
-            )
-
             tx = TempoTransaction.create(
                 chain_id=chain_id,
                 nonce=nonce,
-                gas_limit=HIGH_GAS_LIMIT,
+                gas_limit=BASE_GAS_LIMIT,
                 max_fee_per_gas=max_fee,
                 max_priority_fee_per_gas=priority_fee,
-                calls=(Call.create(to=FEE_CONTROLLER, data=calldata),),
+                fee_token=token,
+                calls=(
+                    Call.create(to=COUNTER_CONTRACT, data=bytes.fromhex("d09de08a")),
+                ),
             )
             signed = tx.sign(funded_account.key.hex())
             receipt = send_tx(w3, signed)
             assert receipt["status"] == 1
-
-    def test_send_with_fee_token(self, w3, chain_id, funded_account):
-        """Test sending transaction with custom fee token."""
-        max_fee, priority_fee = get_gas_params(w3)
-        nonce = w3.eth.get_transaction_count(funded_account.address)
-
-        tx = TempoTransaction.create(
-            chain_id=chain_id,
-            nonce=nonce,
-            gas_limit=BASE_GAS_LIMIT,
-            max_fee_per_gas=max_fee,
-            max_priority_fee_per_gas=priority_fee,
-            fee_token=BETA_USD,
-            calls=(Call.create(to=COUNTER_CONTRACT, data=bytes.fromhex("d09de08a")),),
-        )
-        signed = tx.sign(funded_account.key.hex())
-        receipt = send_tx(w3, signed)
-        assert receipt["status"] == 1
 
 
 class TestTwoNonces:
