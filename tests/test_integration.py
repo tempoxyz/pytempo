@@ -13,16 +13,14 @@ Coverage parity with tempo-foundry's tempo-check.sh:
 - Access keys (keychain signing)
 - Sponsored transactions (fee payer)
 - Batch transactions (multiple calls)
-- DEX operations (liquidity, swaps)
+- Stablecoin DEX operations (liquidity, swaps)
 """
 
 import os
 import time
 
 import pytest
-from eth_abi import encode
 from eth_account import Account
-from eth_utils import function_signature_to_4byte_selector
 from web3 import Web3
 
 from pytempo import (
@@ -32,30 +30,24 @@ from pytempo import (
     TempoTransaction,
     sign_tx_access_key,
 )
-
-
-def encode_call(signature: str, *args) -> bytes:
-    """Encode a function call with selector and ABI-encoded arguments."""
-    selector = function_signature_to_4byte_selector(signature)
-    params_str = signature[signature.index("(") + 1 : signature.rindex(")")]
-    param_types = [p.strip() for p in params_str.split(",")] if params_str else []
-    return selector + encode(param_types, args)
-
+from pytempo.contracts import (
+    ALPHA_USD,
+    BETA_USD,
+    PATH_USD,
+    THETA_USD,
+    TIP20,
+    FeeManager,
+    StablecoinDEX,
+)
 
 # Gas limits for AA transactions (higher intrinsic gas due to account abstraction)
 BASE_GAS_LIMIT = 300_000
 HIGH_GAS_LIMIT = 500_000
 
-# Precompile addresses
-NATIVE_FEE_TOKEN = "0x20c0000000000000000000000000000000000000"
-ALPHA_USD = "0x20C0000000000000000000000000000000000001"
-BETA_USD = "0x20C0000000000000000000000000000000000002"
-THETA_USD = "0x20C0000000000000000000000000000000000003"
-FEE_CONTROLLER = "0xfeec000000000000000000000000000000000000"
-DEX = "0xdec0000000000000000000000000000000000000"
-ACCOUNT_KEYCHAIN = "0xAAAAAAAA00000000000000000000000000000000"
+# Test-specific contract addresses
 COUNTER_CONTRACT = "0x86A2EE8FAf9A840F7a2c64CA3d51209F9A02081D"
 LP_RECIPIENT = "0x6c4143BEd3A13cf9E5E43d45C60aD816FC091d0c"
+COUNTER_INCREMENT = bytes.fromhex("d09de08a")  # increment() selector
 
 # Skip all tests if TEMPO_RPC_URL is not set
 pytestmark = pytest.mark.skipif(
@@ -259,7 +251,7 @@ class TestTransactionSubmission:
             gas_limit=BASE_GAS_LIMIT,
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
-            calls=(Call.create(to=COUNTER_CONTRACT, data=bytes.fromhex("d09de08a")),),
+            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
         )
         signed = tx.sign(funded_account.key.hex())
         receipt = send_tx(w3, signed)
@@ -275,13 +267,6 @@ class TestFeeTokens:
 
         for token in [ALPHA_USD, BETA_USD, THETA_USD]:
             nonce = w3.eth.get_transaction_count(funded_account.address)
-            calldata = encode_call(
-                "mint(address,address,uint256,address)",
-                Web3.to_checksum_address(token),
-                Web3.to_checksum_address(NATIVE_FEE_TOKEN),
-                1_000_000_000,
-                Web3.to_checksum_address(LP_RECIPIENT),
-            )
 
             tx = TempoTransaction.create(
                 chain_id=chain_id,
@@ -289,7 +274,14 @@ class TestFeeTokens:
                 gas_limit=HIGH_GAS_LIMIT,
                 max_fee_per_gas=max_fee,
                 max_priority_fee_per_gas=priority_fee,
-                calls=(Call.create(to=FEE_CONTROLLER, data=calldata),),
+                calls=(
+                    FeeManager.mint(
+                        user_token=token,
+                        validator_token=PATH_USD,
+                        amount=1_000_000_000,
+                        to=LP_RECIPIENT,
+                    ),
+                ),
             )
             signed = tx.sign(funded_account.key.hex())
             receipt = send_tx(w3, signed)
@@ -307,7 +299,7 @@ class TestFeeTokens:
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
             fee_token=BETA_USD,
-            calls=(Call.create(to=COUNTER_CONTRACT, data=bytes.fromhex("d09de08a")),),
+            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
         )
         signed = tx.sign(funded_account.key.hex())
         receipt = send_tx(w3, signed)
@@ -328,7 +320,7 @@ class TestTwoNonces:
             gas_limit=BASE_GAS_LIMIT,
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
-            calls=(Call.create(to=COUNTER_CONTRACT, data=bytes.fromhex("d09de08a")),),
+            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
         )
         signed = tx.sign(funded_account.key.hex())
         receipt = send_tx(w3, signed)
@@ -352,7 +344,7 @@ class TestExpiringNonces:
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
             valid_before=valid_before,
-            calls=(Call.create(to=COUNTER_CONTRACT, data=bytes.fromhex("d09de08a")),),
+            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
         )
         signed = tx.sign(funded_account.key.hex())
         receipt = send_tx(w3, signed)
@@ -374,7 +366,7 @@ class TestExpiringNonces:
             max_priority_fee_per_gas=priority_fee,
             valid_after=valid_after,
             valid_before=valid_before,
-            calls=(Call.create(to=COUNTER_CONTRACT, data=bytes.fromhex("d09de08a")),),
+            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
         )
         signed = tx.sign(funded_account.key.hex())
         receipt = send_tx(w3, signed)
@@ -418,7 +410,7 @@ class TestAccessKeys:
             gas_limit=0,  # Placeholder
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
-            calls=(Call.create(to=COUNTER_CONTRACT, data=bytes.fromhex("d09de08a")),),
+            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
             key_authorization=signed_auth.rlp_encode(),
         )
 
@@ -439,7 +431,7 @@ class TestAccessKeys:
             gas_limit=gas_estimate,
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
-            calls=(Call.create(to=COUNTER_CONTRACT, data=bytes.fromhex("d09de08a")),),
+            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
             key_authorization=signed_auth.rlp_encode(),
         )
 
@@ -484,7 +476,7 @@ class TestAccessKeys:
             gas_limit=0,  # Placeholder
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
-            calls=(Call.create(to=COUNTER_CONTRACT, data=bytes.fromhex("d09de08a")),),
+            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
             key_authorization=signed_auth.rlp_encode(),
         )
 
@@ -505,7 +497,7 @@ class TestAccessKeys:
             gas_limit=gas_estimate_with_auth,
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
-            calls=(Call.create(to=COUNTER_CONTRACT, data=bytes.fromhex("d09de08a")),),
+            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
             key_authorization=signed_auth.rlp_encode(),
         )
 
@@ -529,7 +521,7 @@ class TestAccessKeys:
             gas_limit=0,  # Placeholder
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
-            calls=(Call.create(to=COUNTER_CONTRACT, data=bytes.fromhex("d09de08a")),),
+            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
         )
 
         gas_estimate_no_auth = w3.eth.estimate_gas(
@@ -545,7 +537,7 @@ class TestAccessKeys:
             gas_limit=gas_estimate_no_auth,
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
-            calls=(Call.create(to=COUNTER_CONTRACT, data=bytes.fromhex("d09de08a")),),
+            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
         )
 
         signed_tx2 = sign_tx_access_key(
@@ -572,7 +564,7 @@ class TestSponsoredTransactions:
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
             awaiting_fee_payer=True,
-            calls=(Call.create(to=COUNTER_CONTRACT, data=bytes.fromhex("d09de08a")),),
+            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
         )
 
         sender_signed = tx.sign(funded_account.key.hex())
@@ -602,8 +594,8 @@ class TestBatchTransactions:
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
             calls=(
-                Call.create(to=COUNTER_CONTRACT, data=bytes.fromhex("d09de08a")),
-                Call.create(to=COUNTER_CONTRACT, data=bytes.fromhex("d09de08a")),
+                Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),
+                Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),
             ),
         )
         signed = tx.sign(funded_account.key.hex())
@@ -622,9 +614,9 @@ class TestBatchTransactions:
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
             calls=(
-                Call.create(to=COUNTER_CONTRACT, data=bytes.fromhex("d09de08a")),
-                Call.create(to=COUNTER_CONTRACT, data=bytes.fromhex("d09de08a")),
-                Call.create(to=COUNTER_CONTRACT, data=bytes.fromhex("d09de08a")),
+                Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),
+                Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),
+                Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),
             ),
         )
         signed = tx.sign(funded_account.key.hex())
@@ -633,25 +625,19 @@ class TestBatchTransactions:
 
 
 class TestDEXOperations:
-    """Test DEX operations (liquidity, swaps).
+    """Test Stablecoin DEX operations (liquidity, swaps).
 
-    Note: These tests require the DEX to have sufficient liquidity.
+    Note: These tests require the Stablecoin DEX to have sufficient liquidity.
     On devnet, orders may fail due to insufficient liquidity.
     """
 
     @pytest.mark.skip(
-        reason="DEX operations require liquidity setup - works with full tempo-check.sh flow"
+        reason="Stablecoin DEX operations require liquidity setup - works with full tempo-check.sh flow"
     )
     def test_approve_dex(self, w3, chain_id, funded_account):
-        """Test approving DEX for token spending."""
+        """Test approving Stablecoin DEX for token spending."""
         max_fee, priority_fee = get_gas_params(w3)
         nonce = w3.eth.get_transaction_count(funded_account.address)
-
-        approve_calldata = encode_call(
-            "approve(address,uint256)",
-            Web3.to_checksum_address(DEX),
-            10_000_000_000,
-        )
 
         tx = TempoTransaction.create(
             chain_id=chain_id,
@@ -660,8 +646,13 @@ class TestDEXOperations:
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
             calls=(
-                Call.create(to=BETA_USD, data=approve_calldata),
-                Call.create(to=NATIVE_FEE_TOKEN, data=approve_calldata),
+                TIP20(BETA_USD).approve(
+                    spender=StablecoinDEX.ADDRESS, amount=10_000_000_000
+                ),
+                TIP20(PATH_USD).approve(
+                    spender=StablecoinDEX.ADDRESS,
+                    amount=10_000_000_000,
+                ),
             ),
         )
         signed = tx.sign(funded_account.key.hex())
@@ -669,20 +660,12 @@ class TestDEXOperations:
         assert receipt["status"] == 1
 
     @pytest.mark.skip(
-        reason="DEX operations require liquidity setup - works with full tempo-check.sh flow"
+        reason="Stablecoin DEX operations require liquidity setup - works with full tempo-check.sh flow"
     )
     def test_place_bid(self, w3, chain_id, funded_account):
-        """Test placing a bid on DEX."""
+        """Test placing a bid on Stablecoin DEX."""
         max_fee, priority_fee = get_gas_params(w3)
         nonce = w3.eth.get_transaction_count(funded_account.address)
-
-        calldata = encode_call(
-            "place(address,uint128,bool,int16)",
-            Web3.to_checksum_address(BETA_USD),
-            100_000_000,
-            True,
-            10,
-        )
 
         tx = TempoTransaction.create(
             chain_id=chain_id,
@@ -690,27 +673,23 @@ class TestDEXOperations:
             gas_limit=HIGH_GAS_LIMIT,
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
-            calls=(Call.create(to=DEX, data=calldata),),
+            calls=(
+                StablecoinDEX.place(
+                    token=BETA_USD, amount=100_000_000, is_bid=True, tick=10
+                ),
+            ),
         )
         signed = tx.sign(funded_account.key.hex())
         receipt = send_tx(w3, signed)
         assert receipt["status"] == 1
 
     @pytest.mark.skip(
-        reason="DEX operations require liquidity setup - works with full tempo-check.sh flow"
+        reason="Stablecoin DEX operations require liquidity setup - works with full tempo-check.sh flow"
     )
     def test_place_ask(self, w3, chain_id, funded_account):
-        """Test placing an ask on DEX."""
+        """Test placing an ask on Stablecoin DEX."""
         max_fee, priority_fee = get_gas_params(w3)
         nonce = w3.eth.get_transaction_count(funded_account.address)
-
-        calldata = encode_call(
-            "place(address,uint128,bool,int16)",
-            Web3.to_checksum_address(BETA_USD),
-            100_000_000,
-            False,
-            10,
-        )
 
         tx = TempoTransaction.create(
             chain_id=chain_id,
@@ -718,27 +697,23 @@ class TestDEXOperations:
             gas_limit=HIGH_GAS_LIMIT,
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
-            calls=(Call.create(to=DEX, data=calldata),),
+            calls=(
+                StablecoinDEX.place(
+                    token=BETA_USD, amount=100_000_000, is_bid=False, tick=10
+                ),
+            ),
         )
         signed = tx.sign(funded_account.key.hex())
         receipt = send_tx(w3, signed)
         assert receipt["status"] == 1
 
     @pytest.mark.skip(
-        reason="DEX operations require liquidity setup - works with full tempo-check.sh flow"
+        reason="Stablecoin DEX operations require liquidity setup - works with full tempo-check.sh flow"
     )
     def test_swap_exact_amount_in(self, w3, chain_id, funded_account):
-        """Test swapping exact amount in on DEX."""
+        """Test swapping exact amount in on Stablecoin DEX."""
         max_fee, priority_fee = get_gas_params(w3)
         nonce = w3.eth.get_transaction_count(funded_account.address)
-
-        calldata = encode_call(
-            "swapExactAmountIn(address,address,uint128,uint128)",
-            Web3.to_checksum_address(NATIVE_FEE_TOKEN),
-            Web3.to_checksum_address(BETA_USD),
-            100_000_000,
-            9_000_000,
-        )
 
         tx = TempoTransaction.create(
             chain_id=chain_id,
@@ -746,7 +721,14 @@ class TestDEXOperations:
             gas_limit=HIGH_GAS_LIMIT,
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
-            calls=(Call.create(to=DEX, data=calldata),),
+            calls=(
+                StablecoinDEX.swap_exact_amount_in(
+                    token_in=PATH_USD,
+                    token_out=BETA_USD,
+                    amount_in=100_000_000,
+                    min_amount_out=9_000_000,
+                ),
+            ),
         )
         signed = tx.sign(funded_account.key.hex())
         receipt = send_tx(w3, signed)
@@ -761,9 +743,6 @@ class TestSetUserFeeToken:
         max_fee, priority_fee = get_gas_params(w3)
 
         nonce = w3.eth.get_transaction_count(funded_account.address)
-        set_calldata = encode_call(
-            "setUserToken(address)", Web3.to_checksum_address(BETA_USD)
-        )
 
         tx1 = TempoTransaction.create(
             chain_id=chain_id,
@@ -771,16 +750,13 @@ class TestSetUserFeeToken:
             gas_limit=600_000,
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
-            calls=(Call.create(to=FEE_CONTROLLER, data=set_calldata),),
+            calls=(FeeManager.set_user_token(token=BETA_USD),),
         )
         signed = tx1.sign(funded_account.key.hex())
         receipt = send_tx(w3, signed)
         assert receipt["status"] == 1
 
         nonce = w3.eth.get_transaction_count(funded_account.address)
-        reset_calldata = encode_call(
-            "setUserToken(address)", Web3.to_checksum_address(NATIVE_FEE_TOKEN)
-        )
 
         tx2 = TempoTransaction.create(
             chain_id=chain_id,
@@ -788,7 +764,7 @@ class TestSetUserFeeToken:
             gas_limit=600_000,
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
-            calls=(Call.create(to=FEE_CONTROLLER, data=reset_calldata),),
+            calls=(FeeManager.set_user_token(token=PATH_USD),),
         )
         signed = tx2.sign(funded_account.key.hex())
         receipt = send_tx(w3, signed)

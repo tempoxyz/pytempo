@@ -18,9 +18,9 @@ Usage::
     w3.eth.send_raw_transaction(signed_tx.encode())
 """
 
+from .contracts.account_keychain import AccountKeychain
+from .contracts.addresses import ACCOUNT_KEYCHAIN_ADDRESS
 from .keychain import (
-    ACCOUNT_KEYCHAIN_ADDRESS,
-    GET_REMAINING_LIMIT_SELECTOR,
     INNER_SIGNATURE_LENGTH,
     KEYCHAIN_SIGNATURE_LENGTH,
     KEYCHAIN_SIGNATURE_TYPE,
@@ -30,8 +30,6 @@ from .keychain import (
     TokenLimit,
     build_keychain_signature,
     create_key_authorization,
-    encode_get_remaining_limit_calldata,
-    get_remaining_spending_limit,
     sign_tx_access_key,
 )
 from .models import (
@@ -50,7 +48,7 @@ from .types import (
     as_optional_address,
 )
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 __all__ = [
     # Types
@@ -67,10 +65,8 @@ __all__ = [
     "Signature",
     "TempoTransaction",
     # Keychain precompile
+    "AccountKeychain",
     "ACCOUNT_KEYCHAIN_ADDRESS",
-    "GET_REMAINING_LIMIT_SELECTOR",
-    "encode_get_remaining_limit_calldata",
-    "get_remaining_spending_limit",
     # Key authorization (inline access key provisioning)
     "KeyAuthorization",
     "SignedKeyAuthorization",

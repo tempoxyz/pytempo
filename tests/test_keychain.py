@@ -7,10 +7,10 @@ from eth_account import Account
 from eth_utils import to_bytes
 
 from pytempo import Call, TempoTransaction
+from pytempo.contracts.account_keychain import AccountKeychain
+from pytempo.contracts.addresses import ACCOUNT_KEYCHAIN_ADDRESS
 from pytempo.keychain import (
     # Constants
-    ACCOUNT_KEYCHAIN_ADDRESS,
-    GET_REMAINING_LIMIT_SELECTOR,
     INNER_SIGNATURE_LENGTH,
     KEYCHAIN_SIGNATURE_LENGTH,
     KEYCHAIN_SIGNATURE_TYPE,
@@ -22,9 +22,6 @@ from pytempo.keychain import (
     # Signing functions
     build_keychain_signature,
     create_key_authorization,
-    # Precompile functions
-    encode_get_remaining_limit_calldata,
-    get_remaining_spending_limit,
     sign_tx_access_key,
 )
 
@@ -37,81 +34,20 @@ class TestPrecompileConstants:
         assert ACCOUNT_KEYCHAIN_ADDRESS.startswith("0x")
         assert len(ACCOUNT_KEYCHAIN_ADDRESS) == 42
 
-    def test_get_remaining_limit_selector(self):
-        """Function selector should be 4 bytes (10 hex chars with 0x)."""
-        assert GET_REMAINING_LIMIT_SELECTOR.startswith("0x")
-        assert len(GET_REMAINING_LIMIT_SELECTOR) == 10
 
-
-class TestEncodeGetRemainingLimitCalldata:
-    """Tests for calldata encoding."""
-
-    def test_calldata_starts_with_selector(self):
-        """Calldata should start with function selector."""
-        calldata = encode_get_remaining_limit_calldata(
-            "0x" + "a" * 40,
-            "0x" + "b" * 40,
-            "0x" + "c" * 40,
-        )
-
-        assert calldata.startswith(GET_REMAINING_LIMIT_SELECTOR)
-
-    def test_calldata_length(self):
-        """Calldata should be selector (4 bytes) + 3 addresses (32 bytes each)."""
-        calldata = encode_get_remaining_limit_calldata(
-            "0x" + "a" * 40,
-            "0x" + "b" * 40,
-            "0x" + "c" * 40,
-        )
-
-        # 0x + 8 (selector) + 64*3 (addresses) = 202 chars
-        assert len(calldata) == 202
-
-    def test_addresses_are_padded(self):
-        """Each address should be zero-padded to 32 bytes."""
-        calldata = encode_get_remaining_limit_calldata(
-            "0x1234567890123456789012345678901234567890",
-            "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
-            "0x0000000000000000000000000000000000000001",
-        )
-
-        # Skip selector
-        params = calldata[10:]
-
-        # First param (account)
-        assert params[:64] == "0" * 24 + "1234567890123456789012345678901234567890"
-
-        # Second param (key_id)
-        assert params[64:128] == "0" * 24 + "abcdefabcdefabcdefabcdefabcdefabcdefabcd"
-
-        # Third param (token)
-        assert params[128:192] == "0" * 63 + "1"
-
-    def test_lowercase_addresses(self):
-        """Addresses should be lowercased in calldata."""
-        calldata = encode_get_remaining_limit_calldata(
-            "0xABCDEF1234567890ABCDEF1234567890ABCDEF12",
-            "0x1234567890ABCDEF1234567890ABCDEF12345678",
-            "0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
-        )
-
-        assert "ABCDEF" not in calldata
-        assert "abcdef" in calldata
-
-
-class TestGetRemainingSpendingLimit:
-    """Tests for querying spending limits."""
+class TestGetRemainingLimit:
+    """Tests for AccountKeychain.get_remaining_limit."""
 
     def test_returns_int(self):
         """Should return an integer."""
         mock_w3 = MagicMock()
         mock_w3.eth.call.return_value = (1000000).to_bytes(32, "big")
 
-        result = get_remaining_spending_limit(
+        result = AccountKeychain.get_remaining_limit(
             mock_w3,
-            "0x" + "a" * 40,
-            "0x" + "b" * 40,
-            "0x" + "c" * 40,
+            account_address="0x" + "a" * 40,
+            key_id="0x" + "b" * 40,
+            token_address="0x" + "c" * 40,
         )
 
         assert isinstance(result, int)
@@ -123,11 +59,11 @@ class TestGetRemainingSpendingLimit:
         large_value = 10**18  # 1 ETH worth
         mock_w3.eth.call.return_value = large_value.to_bytes(32, "big")
 
-        result = get_remaining_spending_limit(
+        result = AccountKeychain.get_remaining_limit(
             mock_w3,
-            "0x" + "a" * 40,
-            "0x" + "b" * 40,
-            "0x" + "c" * 40,
+            account_address="0x" + "a" * 40,
+            key_id="0x" + "b" * 40,
+            token_address="0x" + "c" * 40,
         )
 
         assert result == large_value
@@ -137,11 +73,11 @@ class TestGetRemainingSpendingLimit:
         mock_w3 = MagicMock()
         mock_w3.eth.call.return_value = (0).to_bytes(32, "big")
 
-        result = get_remaining_spending_limit(
+        result = AccountKeychain.get_remaining_limit(
             mock_w3,
-            "0x" + "a" * 40,
-            "0x" + "b" * 40,
-            "0x" + "c" * 40,
+            account_address="0x" + "a" * 40,
+            key_id="0x" + "b" * 40,
+            token_address="0x" + "c" * 40,
         )
 
         assert result == 0
@@ -151,21 +87,27 @@ class TestGetRemainingSpendingLimit:
         mock_w3 = MagicMock()
 
         with pytest.raises(ValueError):
-            get_remaining_spending_limit(mock_w3, "", "0x" + "b" * 40, "0x" + "c" * 40)
+            AccountKeychain.get_remaining_limit(
+                mock_w3, account_address="", key_id="0x" + "b" * 40, token_address="0x" + "c" * 40
+            )
 
     def test_raises_on_empty_key_id(self):
         """Should raise ValueError if key_id is empty."""
         mock_w3 = MagicMock()
 
         with pytest.raises(ValueError):
-            get_remaining_spending_limit(mock_w3, "0x" + "a" * 40, "", "0x" + "c" * 40)
+            AccountKeychain.get_remaining_limit(
+                mock_w3, account_address="0x" + "a" * 40, key_id="", token_address="0x" + "c" * 40
+            )
 
     def test_raises_on_empty_token(self):
         """Should raise ValueError if token_address is empty."""
         mock_w3 = MagicMock()
 
         with pytest.raises(ValueError):
-            get_remaining_spending_limit(mock_w3, "0x" + "a" * 40, "0x" + "b" * 40, "")
+            AccountKeychain.get_remaining_limit(
+                mock_w3, account_address="0x" + "a" * 40, key_id="0x" + "b" * 40, token_address=""
+            )
 
 
 class TestKeychainSignatureFormat:

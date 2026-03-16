@@ -1,6 +1,6 @@
 [project]
 name = "pytempo"
-version = "0.3.1"
+version = "0.4.0"
 description = "Web3.py extension for Tempo blockchain - adds support for AA transactions and Tempo-specific features"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -30,6 +30,7 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build]
 exclude = [".jj"]
+artifacts = ["pytempo/contracts/abis/*.json"]
 
 [tool.ruff]
 line-length = 88
