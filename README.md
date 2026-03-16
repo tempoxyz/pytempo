@@ -31,10 +31,13 @@ uv add pytempo
 
 ## Quick Start
 
-### Recommended: Typed API
+### Typed Contract Helpers (v0.4.0+)
+
+Use the built-in typed helpers for Tempo precompiles — no ABI knowledge needed:
 
 ```python
-from pytempo import TempoTransaction, Call
+from pytempo import TempoTransaction
+from pytempo.contracts import TIP20, StablecoinDEX, ALPHA_USD, BETA_USD
 from web3 import Web3
 
 w3 = Web3(Web3.HTTPProvider("https://rpc.testnet.tempo.xyz"))
@@ -47,7 +50,10 @@ tx = TempoTransaction.create(
     max_fee_per_gas=2_000_000_000,
     max_priority_fee_per_gas=1_000_000_000,
     nonce=0,
-    calls=(Call.create(to="0xRecipient...", value=1000),),
+    calls=(
+        TIP20(ALPHA_USD).approve(spender=StablecoinDEX.ADDRESS, amount=10**18),
+        StablecoinDEX.place(token=BETA_USD, amount=100_000_000, is_bid=True, tick=10),
+    ),
 )
 signed_tx = tx.sign("0xYourPrivateKey...")
 
@@ -55,28 +61,29 @@ signed_tx = tx.sign("0xYourPrivateKey...")
 tx_hash = w3.eth.send_raw_transaction(signed_tx.encode())
 ```
 
-### Typed Contract Helpers
+### Manual Calls (v0.2.1+)
 
-Use the built-in typed helpers for Tempo precompiles and tokens — no ABI knowledge needed:
+For arbitrary contract calls or simple transfers, use `Call.create()` directly:
 
 ```python
-from pytempo import TempoTransaction
-from pytempo.contracts import TIP20, StablecoinDEX, ALPHA_USD, BETA_USD
+from pytempo import TempoTransaction, Call
+from web3 import Web3
 
-alpha = TIP20(ALPHA_USD)
+w3 = Web3(Web3.HTTPProvider("https://rpc.testnet.tempo.xyz"))
+
 tx = TempoTransaction.create(
     chain_id=42429,
-    gas_limit=300_000,
+    gas_limit=100_000,
     max_fee_per_gas=2_000_000_000,
-    calls=(
-        alpha.approve(spender=StablecoinDEX.ADDRESS, amount=10**18),
-        StablecoinDEX.place(token=BETA_USD, amount=100_000_000, is_bid=True, tick=10),
-    ),
+    max_priority_fee_per_gas=1_000_000_000,
+    nonce=0,
+    calls=(Call.create(to="0xRecipient...", value=1000),),
 )
-signed_tx = tx.sign("0xPrivateKey...")
+signed_tx = tx.sign("0xYourPrivateKey...")
+tx_hash = w3.eth.send_raw_transaction(signed_tx.encode())
 ```
 
-### Custom Fee Tokens
+### Custom Fee Tokens (v0.2.1+)
 
 ```python
 from pytempo.contracts import BETA_USD
@@ -90,7 +97,7 @@ tx = TempoTransaction.create(
 )
 ```
 
-### Gas Sponsorship
+### Gas Sponsorship (v0.2.1+)
 
 ```python
 from pytempo import TempoTransaction, Call
@@ -111,7 +118,7 @@ final_tx = signed_tx.sign("0xFeePayerPrivateKey...", for_fee_payer=True)
 w3.eth.send_raw_transaction(final_tx.encode())
 ```
 
-### Batch Multiple Calls
+### Batch Multiple Calls (v0.2.1+)
 
 ```python
 from pytempo import TempoTransaction, Call
@@ -128,7 +135,7 @@ tx = TempoTransaction.create(
 signed_tx = tx.sign("0xPrivateKey...")
 ```
 
-### Parallel Nonces
+### Parallel Nonces (v0.2.1+)
 
 ```python
 from pytempo import TempoTransaction, Call
@@ -153,7 +160,20 @@ tx2 = TempoTransaction.create(
 # Both can be executed in parallel
 ```
 
-### Parsing from Dicts
+### Contract Creation (v0.2.1+)
+
+```python
+from pytempo import TempoTransaction, Call
+
+tx = TempoTransaction.create(
+    chain_id=42429,
+    gas_limit=500_000,
+    calls=(Call.create(to=b"", data="0x6080604052..."),),  # Empty 'to' for creation
+)
+signed_tx = tx.sign("0xPrivateKey...")
+```
+
+### Parsing from Dicts (v0.2.1+)
 
 ```python
 from pytempo import TempoTransaction
@@ -168,7 +188,7 @@ tx = TempoTransaction.from_dict({
 })
 ```
 
-### Type Coercion Helpers
+### Type Coercion Helpers (v0.2.1+)
 
 ```python
 from pytempo import as_address, as_hash32, as_bytes, as_optional_address
