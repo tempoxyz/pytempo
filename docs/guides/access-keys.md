@@ -57,19 +57,19 @@ signed_tx = sign_tx_access_key(
 )
 ```
 
-This produces a **Keychain signature** (type `0x03`): 86 bytes consisting of the type byte, root account address, and inner secp256k1 signature.
+This produces a **Keychain V2 signature** (type `0x04`): 86 bytes consisting of the type byte, root account address, and inner secp256k1 signature.
 
 ## Querying remaining limits
 
 Check how much spending limit remains for an access key:
 
 ```python
-from pytempo import get_remaining_spending_limit
+from pytempo.contracts import AccountKeychain
 from web3 import Web3
 
 w3 = Web3(Web3.HTTPProvider("https://rpc.testnet.tempo.xyz"))
 
-remaining = get_remaining_spending_limit(
+remaining = AccountKeychain.get_remaining_limit(
     w3,
     account_address="0xRootAccount...",
     key_id="0xAccessKey...",

@@ -20,6 +20,7 @@ This is a **proof-of-concept**. Please reach out to the Tempo team if you are in
 
 ```python
 from pytempo import TempoTransaction, Call
+from pytempo.contracts import ALPHA_USD
 from web3 import Web3
 
 w3 = Web3(Web3.HTTPProvider("https://rpc.testnet.tempo.xyz"))
@@ -30,7 +31,7 @@ tx = TempoTransaction.create(
     max_fee_per_gas=2_000_000_000,
     max_priority_fee_per_gas=1_000_000_000,
     nonce=0,
-    fee_token="0x20c0000000000000000000000000000000000001",
+    fee_token=ALPHA_USD,
     calls=(Call.create(to="0xRecipient...", value=1000),),
 )
 signed_tx = tx.sign("0xYourPrivateKey...")

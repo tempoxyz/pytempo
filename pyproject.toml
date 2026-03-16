@@ -30,6 +30,7 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build]
 exclude = [".jj"]
+artifacts = ["pytempo/contracts/abis/*.json"]
 
 [tool.ruff]
 line-length = 88

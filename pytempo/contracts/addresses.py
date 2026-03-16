@@ -1,0 +1,34 @@
+"""Canonical addresses for Tempo precompiles and tokens.
+
+Mirrors `StdPrecompiles.sol` and `StdTokens.sol` from `tempoxyz/tempo-std`.
+"""
+
+from eth_utils import to_checksum_address
+
+# Precompiles (from StdPrecompiles.sol)
+FEE_MANAGER_ADDRESS = to_checksum_address("0xfeEC000000000000000000000000000000000000")
+TIP403_REGISTRY_ADDRESS = to_checksum_address(
+    "0x403c000000000000000000000000000000000000"
+)
+TIP20_FACTORY_ADDRESS = to_checksum_address(
+    "0x20Fc000000000000000000000000000000000000"
+)
+TIP20_REWARDS_REGISTRY_ADDRESS = to_checksum_address(
+    "0x2100000000000000000000000000000000000000"
+)
+STABLECOIN_DEX_ADDRESS = to_checksum_address(
+    "0xDEc0000000000000000000000000000000000000"
+)
+NONCE_ADDRESS = to_checksum_address("0x4e4F4E4345000000000000000000000000000000")
+VALIDATOR_CONFIG_ADDRESS = to_checksum_address(
+    "0xCccCcCCC00000000000000000000000000000000"
+)
+ACCOUNT_KEYCHAIN_ADDRESS = to_checksum_address(
+    "0xaAAAaaAA00000000000000000000000000000000"
+)
+
+# Tokens (from StdTokens.sol)
+PATH_USD = to_checksum_address("0x20C0000000000000000000000000000000000000")
+ALPHA_USD = to_checksum_address("0x20C0000000000000000000000000000000000001")
+BETA_USD = to_checksum_address("0x20C0000000000000000000000000000000000002")
+THETA_USD = to_checksum_address("0x20C0000000000000000000000000000000000003")

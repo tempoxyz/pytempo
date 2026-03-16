@@ -62,11 +62,13 @@ tx = TempoTransaction.create(
 Pay gas fees in a supported ERC-20 token:
 
 ```python
+from pytempo.contracts import ALPHA_USD
+
 tx = TempoTransaction.create(
     chain_id=42429,
     gas_limit=100_000,
     max_fee_per_gas=2_000_000_000,
-    fee_token="0x20c0000000000000000000000000000000000001",  # AlphaUSD
+    fee_token=ALPHA_USD,
     calls=(Call.create(to="0xRecipient...", value=1000),),
 )
 ```

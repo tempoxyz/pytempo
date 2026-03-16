@@ -36,14 +36,6 @@ from rlp.sedes import Binary, big_endian_int
 address_sedes = Binary.fixed_length(20, allow_empty=True)
 uint256_sedes = big_endian_int
 
-# AccountKeychain precompile address
-ACCOUNT_KEYCHAIN_ADDRESS = "0xaAAAaaAA00000000000000000000000000000000"
-
-# Function selectors
-GET_REMAINING_LIMIT_SELECTOR = (
-    "0x63b4290d"  # getRemainingLimit(address,address,address)
-)
-
 # Keychain signature constants
 KEYCHAIN_SIGNATURE_TYPE = 0x04
 INNER_SIGNATURE_LENGTH = 65  # r (32) + s (32) + v (1)
@@ -310,60 +302,6 @@ def create_key_authorization(
         expiry=expiry,
         limits=token_limits,
     )
-
-
-def encode_get_remaining_limit_calldata(
-    account_address: str,
-    key_id: str,
-    token_address: str,
-) -> str:
-    """Encode calldata for getRemainingLimit(address,address,address).
-
-    Args:
-        account_address: The root wallet address
-        key_id: The access key ID (address)
-        token_address: The token to check limit for
-
-    Returns:
-        Hex-encoded calldata string (with 0x prefix)
-    """
-    account_padded = account_address[2:].lower().zfill(64)
-    key_padded = key_id[2:].lower().zfill(64)
-    token_padded = token_address[2:].lower().zfill(64)
-
-    return f"{GET_REMAINING_LIMIT_SELECTOR}{account_padded}{key_padded}{token_padded}"
-
-
-def get_remaining_spending_limit(
-    w3,
-    account_address: str,
-    key_id: str,
-    token_address: str,
-) -> int:
-    """Query remaining spending limit for an access key from the AccountKeychain precompile.
-
-    Args:
-        w3: Web3 instance connected to a Tempo RPC
-        account_address: The root wallet address
-        key_id: The access key ID (address)
-        token_address: The token to check limit for
-
-    Returns:
-        Remaining spending limit in base units (0 if error or no limit)
-
-    Raises:
-        ValueError: If any address parameter is empty
-    """
-    if not account_address or not key_id or not token_address:
-        raise ValueError("account_address, key_id, and token_address are required")
-
-    keychain = to_checksum_address(ACCOUNT_KEYCHAIN_ADDRESS)
-    call_data = encode_get_remaining_limit_calldata(
-        account_address, key_id, token_address
-    )
-
-    result = w3.eth.call({"to": keychain, "data": call_data})
-    return int.from_bytes(result, "big")
 
 
 def build_keychain_signature(

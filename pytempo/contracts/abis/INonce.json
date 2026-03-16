@@ -1,0 +1,66 @@
+[
+  {
+    "inputs": [],
+    "name": "InvalidNonceKey",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "NonceOverflow",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "ProtocolNonceNotSupported",
+    "type": "error"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "nonceKey",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint64",
+        "name": "newNonce",
+        "type": "uint64"
+      }
+    ],
+    "name": "NonceIncremented",
+    "type": "event"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "nonceKey",
+        "type": "uint256"
+      }
+    ],
+    "name": "getNonce",
+    "outputs": [
+      {
+        "internalType": "uint64",
+        "name": "nonce",
+        "type": "uint64"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  }
+]
