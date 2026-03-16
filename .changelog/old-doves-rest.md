@@ -1,5 +1,5 @@
 ---
-pytempo: major
+pytempo: minor
 ---
 
 ### New Features
