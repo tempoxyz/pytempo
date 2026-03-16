@@ -88,7 +88,10 @@ class TestGetRemainingLimit:
 
         with pytest.raises(ValueError):
             AccountKeychain.get_remaining_limit(
-                mock_w3, account_address="", key_id="0x" + "b" * 40, token_address="0x" + "c" * 40
+                mock_w3,
+                account_address="",
+                key_id="0x" + "b" * 40,
+                token_address="0x" + "c" * 40,
             )
 
     def test_raises_on_empty_key_id(self):
@@ -97,7 +100,10 @@ class TestGetRemainingLimit:
 
         with pytest.raises(ValueError):
             AccountKeychain.get_remaining_limit(
-                mock_w3, account_address="0x" + "a" * 40, key_id="", token_address="0x" + "c" * 40
+                mock_w3,
+                account_address="0x" + "a" * 40,
+                key_id="",
+                token_address="0x" + "c" * 40,
             )
 
     def test_raises_on_empty_token(self):
@@ -106,7 +112,10 @@ class TestGetRemainingLimit:
 
         with pytest.raises(ValueError):
             AccountKeychain.get_remaining_limit(
-                mock_w3, account_address="0x" + "a" * 40, key_id="0x" + "b" * 40, token_address=""
+                mock_w3,
+                account_address="0x" + "a" * 40,
+                key_id="0x" + "b" * 40,
+                token_address="",
             )
 
 
