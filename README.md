@@ -15,21 +15,18 @@
 
 # pytempo
 
-> [!IMPORTANT]
-> This is a **proof-of-concept**, please reach out to the Tempo team if you are interested in using this library in production.
-
 Web3.py extension for Tempo.
 
 ## Installation
 
 ```bash
-pip install -e .
+pip install pytempo
 ```
 
 Or with uv:
 
 ```bash
-uv add .
+uv add pytempo
 ```
 
 ## Quick Start
@@ -50,7 +47,6 @@ tx = TempoTransaction.create(
     max_fee_per_gas=2_000_000_000,
     max_priority_fee_per_gas=1_000_000_000,
     nonce=0,
-    fee_token="0x20c0000000000000000000000000000000000001",
     calls=(Call.create(to="0xRecipient...", value=1000),),
 )
 signed_tx = tx.sign("0xYourPrivateKey...")
@@ -59,132 +55,38 @@ signed_tx = tx.sign("0xYourPrivateKey...")
 tx_hash = w3.eth.send_raw_transaction(signed_tx.encode())
 ```
 
-### Legacy API (Backwards Compatible)
+### Typed Contract Helpers
+
+Use the built-in typed helpers for Tempo precompiles and tokens — no ABI knowledge needed:
 
 ```python
-from pytempo import patch_web3_for_tempo, create_tempo_transaction
-from web3 import Web3
+from pytempo import TempoTransaction
+from pytempo.contracts import TIP20, StablecoinDEX, ALPHA_USD, BETA_USD
 
-# Step 1: Patch web3.py to add Tempo support
-# (Only needed if using web3's internal transaction parsing)
-patch_web3_for_tempo()
-
-# Step 2: Use web3.py normally with Tempo features
-w3 = Web3(Web3.HTTPProvider("https://rpc.testnet.tempo.xyz"))
-account = w3.eth.account.from_key("0x...")
-
-# Step 3: Create Tempo AA transaction (Type 0x76)
-tx = create_tempo_transaction(
-    to="0xRecipient...",
-    value=0,
-    gas=100000,
-    max_fee_per_gas=w3.eth.gas_price * 2,
-    max_priority_fee_per_gas=w3.eth.gas_price,
-    nonce=w3.eth.get_transaction_count(account.address),
-    chain_id=w3.eth.chain_id,
-    fee_token="0x20c0000000000000000000000000000000000001", # AlphaUSD
+alpha = TIP20(ALPHA_USD)
+tx = TempoTransaction.create(
+    chain_id=42429,
+    gas_limit=300_000,
+    max_fee_per_gas=2_000_000_000,
+    calls=(
+        alpha.approve(spender=StablecoinDEX.ADDRESS, amount=10**18),
+        StablecoinDEX.place(token=BETA_USD, amount=100_000_000, is_bid=True, tick=10),
+    ),
 )
-
-# Step 4: Sign and send using standard web3.py
-tx.sign(account.key.hex())
-tx_hash = w3.eth.send_raw_transaction(tx.encode())
-receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+signed_tx = tx.sign("0xPrivateKey...")
 ```
 
-## Typed API (v0.2.1+)
-
-The typed API provides immutable dataclasses with validation:
+### Custom Fee Tokens
 
 ```python
-from pytempo import TempoTransaction, Call, AccessListItem
+from pytempo.contracts import BETA_USD
 
-# All parameters passed directly to create()
 tx = TempoTransaction.create(
     chain_id=42429,
     gas_limit=100_000,
     max_fee_per_gas=2_000_000_000,
-    fee_token="0x20c0000000000000000000000000000000000001",
-    awaiting_fee_payer=True,  # Mark for fee payer
-    calls=(
-        Call.create(to="0xRecipient...", value=1000, data="0xabcd"),
-        Call.create(to="0xOther...", value=2000),  # Batch multiple calls
-    ),
-)
-
-# Immutable signing - returns new transaction
-signed = tx.sign("0xPrivateKey...")
-assert tx.sender_signature is None  # Original unchanged
-assert signed.sender_signature is not None
-```
-
-### Parsing from Dicts
-
-```python
-from pytempo import TempoTransaction
-
-# Supports both camelCase and snake_case keys
-tx = TempoTransaction.from_dict({
-    "chainId": 42429,
-    "gas": 100_000,
-    "maxFeePerGas": 2_000_000_000,
-    "to": "0xRecipient...",
-    "value": 1000,
-})
-```
-
-### Type Coercion Helpers
-
-```python
-from pytempo import as_address, as_hash32, as_bytes, as_optional_address
-
-# Validate and convert addresses
-addr = as_address("0xF0109fC8DF283027b6285cc889F5aA624EaC1F55")  # -> bytes (20)
-addr = as_address(b"\x00" * 20)  # Also accepts bytes
-
-# Optional addresses (treats empty as None)
-addr = as_optional_address("0x")  # -> None
-addr = as_optional_address(None)  # -> None
-
-# Validate 32-byte hashes
-h = as_hash32("0x" + "ab" * 32)  # -> bytes (32)
-
-# Convert hex strings to bytes
-data = as_bytes("0xabcdef")  # -> b'\xab\xcd\xef'
-```
-
-## Legacy Usage
-
-### Basic Transaction
-
-```python
-from pytempo import create_tempo_transaction
-
-tx = create_tempo_transaction(
-    to="0xRecipient...",
-    value=1000000000000000,
-    gas=100000,
-    max_fee_per_gas=2000000000,
-    max_priority_fee_per_gas=2000000000,
-    nonce=0,
-    chain_id=42429,
-)
-
-tx.sign("0xYourPrivateKey...")
-encoded = tx.encode()
-```
-
-### With Custom Fee Token
-
-```python
-tx = create_tempo_transaction(
-    to="0xRecipient...",
-    value=0,
-    fee_token="0xTokenAddress...",  # Pay gas in this ERC-20 token
-    gas=100000,
-    max_fee_per_gas=2000000000,
-    max_priority_fee_per_gas=2000000000,
-    nonce=0,
-    chain_id=42429,
+    fee_token=BETA_USD,
+    calls=(Call.create(to="0xRecipient...", value=1000),),
 )
 ```
 
@@ -198,8 +100,7 @@ tx = TempoTransaction.create(
     chain_id=42429,
     gas_limit=100_000,
     max_fee_per_gas=2_000_000_000,
-    fee_token="0xTokenAddress...",
-    awaiting_fee_payer=True,  # Mark for fee payer
+    awaiting_fee_payer=True,
     calls=(Call.create(to="0xRecipient...", value=1000),),
 )
 signed_tx = tx.sign("0xUserPrivateKey...")
@@ -207,7 +108,6 @@ signed_tx = tx.sign("0xUserPrivateKey...")
 # Fee payer signs (pays gas)
 final_tx = signed_tx.sign("0xFeePayerPrivateKey...", for_fee_payer=True)
 
-# Send
 w3.eth.send_raw_transaction(final_tx.encode())
 ```
 
@@ -253,22 +153,44 @@ tx2 = TempoTransaction.create(
 # Both can be executed in parallel
 ```
 
-### Contract Creation
+### Parsing from Dicts
 
 ```python
-from pytempo import TempoTransaction, Call
+from pytempo import TempoTransaction
 
-tx = TempoTransaction.create(
-    chain_id=42429,
-    gas_limit=500_000,
-    calls=(Call.create(to=b"", data="0x6080604052..."),),  # Empty 'to' for creation
-)
-signed_tx = tx.sign("0xPrivateKey...")
+# Supports both camelCase and snake_case keys
+tx = TempoTransaction.from_dict({
+    "chainId": 42429,
+    "gas": 100_000,
+    "maxFeePerGas": 2_000_000_000,
+    "to": "0xRecipient...",
+    "value": 1000,
+})
+```
+
+### Type Coercion Helpers
+
+```python
+from pytempo import as_address, as_hash32, as_bytes, as_optional_address
+
+# Validate and convert addresses
+addr = as_address("0xF0109fC8DF283027b6285cc889F5aA624EaC1F55")  # -> bytes (20)
+addr = as_address(b"\x00" * 20)  # Also accepts bytes
+
+# Optional addresses (treats empty as None)
+addr = as_optional_address("0x")  # -> None
+addr = as_optional_address(None)  # -> None
+
+# Validate 32-byte hashes
+h = as_hash32("0x" + "ab" * 32)  # -> bytes (32)
+
+# Convert hex strings to bytes
+data = as_bytes("0xabcdef")  # -> b'\xab\xcd\xef'
 ```
 
 ## API Reference
 
-### `TempoTransaction` (Recommended)
+### `TempoTransaction`
 
 Immutable, strongly-typed transaction (frozen dataclass).
 
@@ -313,31 +235,16 @@ EIP-2930 access list entry.
 
 - `AccessListItem.create(address, storage_keys=())` - Create with type coercion
 
-### `patch_web3_for_tempo()`
+### Contract Helpers
 
-Monkey patches web3.py to recognize Tempo AA transactions. **Must be called before using web3**.
+Typed call builders for Tempo precompiles and tokens:
 
-### `create_tempo_transaction(...)` (Legacy)
-
-Creates a mutable Tempo AA transaction.
-
-**Parameters:**
-
-- `to` (str): Destination address
-- `value` (int): Value in wei (default: 0)
-- `gas` (int): Gas limit
-- `max_fee_per_gas` (int): Maximum fee per gas
-- `max_priority_fee_per_gas` (int): Maximum priority fee per gas
-- `nonce` (int): Transaction nonce
-- `chain_id` (int): Chain ID
-- `nonce_key` (int): Nonce key for parallel execution (default: 0)
-- `fee_token` (str, optional): ERC-20 token address for gas payment
-- `calls` (list, optional): List of calls for batching
-- `data` (str, optional): Transaction data
-- `valid_before` (int, optional): Timestamp before which tx is valid
-- `valid_after` (int, optional): Timestamp after which tx becomes valid
-
-**Returns:** `LegacyTempoTransaction`
+- `TIP20` — TIP-20 token operations (transfer, approve, mint, burn, permit)
+- `StablecoinDEX` — Stablecoin DEX operations (place, cancel, swap, withdraw)
+- `AccountKeychain` — Access key management (authorize, revoke, spending limits, queries)
+- `FeeAMM` — Fee AMM liquidity operations (mint, burn, rebalance_swap)
+- `FeeManager` — Fee manager operations (set fee token, distribute fees); inherits `FeeAMM`
+- `Nonce` — Nonce precompile queries (get_nonce)
 
 ## Development
 

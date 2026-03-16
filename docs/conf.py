@@ -3,7 +3,7 @@
 project = "pytempo"
 copyright = "2025, Tempo"
 author = "Tempo"
-release = "0.3.0"
+release = "0.4.0"
 
 extensions = [
     "sphinx.ext.autodoc",
