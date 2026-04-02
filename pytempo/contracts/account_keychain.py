@@ -25,6 +25,7 @@ Returns :class:`~pytempo.Call` objects ready to use in a
 from collections.abc import Sequence
 from typing import Optional
 
+from pytempo.keychain import CallScope
 from pytempo.models import Call
 
 from ._encode import encode_calldata
@@ -51,7 +52,7 @@ class AccountKeychain:
         enforce_limits: bool = False,
         limits: Optional[Sequence[tuple[str, int]]] = None,
         allow_any_calls: bool = True,
-        allowed_calls: Optional[Sequence[tuple[str, bytes]]] = None,
+        allowed_calls: Optional[Sequence[CallScope]] = None,
     ) -> Call:
         """Build a TIP-1011 ``authorizeKey(address,uint8,KeyRestrictions)`` call (T3+).
 
@@ -62,12 +63,14 @@ class AccountKeychain:
             enforce_limits: Whether to enforce spending limits.
             limits: List of ``(token_address, amount)`` tuples for spending limits.
             allow_any_calls: Whether the key can call any contract (default True).
-            allowed_calls: List of ``(target_address, selector_bytes4)`` tuples
-                restricting which contracts/functions the key can call.
+            allowed_calls: List of :class:`~pytempo.keychain.CallScope` restricting
+                which contracts/functions the key can call.
                 Only used when ``allow_any_calls`` is False.
         """
         limit_tuples = list(limits) if limits else []
-        call_tuples = list(allowed_calls) if allowed_calls else []
+        call_tuples = (
+            [(s.target, s.selector) for s in allowed_calls] if allowed_calls else []
+        )
         config = (expiry, enforce_limits, limit_tuples, allow_any_calls, call_tuples)
         data = encode_calldata(
             _ABI,

@@ -24,6 +24,7 @@ from .keychain import (
     INNER_SIGNATURE_LENGTH,
     KEYCHAIN_SIGNATURE_LENGTH,
     KEYCHAIN_SIGNATURE_TYPE,
+    CallScope,
     KeyAuthorization,
     SignatureType,
     SignedKeyAuthorization,
@@ -72,6 +73,7 @@ __all__ = [
     "SignedKeyAuthorization",
     "SignatureType",
     "TokenLimit",
+    "CallScope",
     "create_key_authorization",
     # Keychain signing
     "KEYCHAIN_SIGNATURE_TYPE",

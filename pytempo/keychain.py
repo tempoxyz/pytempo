@@ -84,6 +84,24 @@ class TokenLimit:
 
 
 @dataclass
+class CallScope:
+    """Call scope restriction for access keys (TIP-1011).
+
+    Restricts an access key to only call specific contract functions.
+    Used in ``AccountKeychain.authorize_key()`` when ``allow_any_calls`` is False.
+
+    Args:
+        target: Contract address the key is allowed to call.
+        selector: 4-byte function selector (e.g. ``bytes.fromhex("d09de08a")``
+            for ``increment()``). Use ``b"\\x00\\x00\\x00\\x00"`` for all functions
+            on the target.
+    """
+
+    target: str
+    selector: bytes
+
+
+@dataclass
 class KeyAuthorization:
     """Key authorization for provisioning access keys.
 
