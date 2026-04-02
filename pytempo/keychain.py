@@ -120,8 +120,10 @@ class KeyAuthorization:
         items: list = [self.chain_id, self.key_type, key_id_bytes]
 
         # Add optional trailing fields
-        if self.expiry is not None or self.limits is not None:
-            items.append(self.expiry if self.expiry is not None else b"")
+        # expiry=0 is treated the same as expiry=None (never expires)
+        has_expiry = self.expiry is not None and self.expiry != 0
+        if has_expiry or self.limits is not None:
+            items.append(self.expiry if has_expiry else b"")
 
         if self.limits is not None:
             items.append([limit.to_rlp() for limit in self.limits])
@@ -187,15 +189,12 @@ class SignedKeyAuthorization:
         ]
 
         # Add optional trailing fields (expiry, limits)
-        if (
-            self.authorization.expiry is not None
-            or self.authorization.limits is not None
-        ):
-            auth_items.append(
-                self.authorization.expiry
-                if self.authorization.expiry is not None
-                else b""
-            )
+        # expiry=0 is treated the same as expiry=None (never expires)
+        has_expiry = (
+            self.authorization.expiry is not None and self.authorization.expiry != 0
+        )
+        if has_expiry or self.authorization.limits is not None:
+            auth_items.append(self.authorization.expiry if has_expiry else b"")
 
         if self.authorization.limits is not None:
             auth_items.append([limit.to_rlp() for limit in self.authorization.limits])
