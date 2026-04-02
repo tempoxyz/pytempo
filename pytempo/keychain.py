@@ -90,15 +90,25 @@ class CallScope:
     Restricts an access key to only call specific contract functions.
     Used in ``AccountKeychain.authorize_key()`` when ``allow_any_calls`` is False.
 
+    Note: function selectors are only allowed when the target is a TIP20 token
+    address. For non-token targets, use ``selector=b"\\x00\\x00\\x00\\x00"``
+    to allow all functions.
+
     Args:
-        target: Contract address the key is allowed to call.
-        selector: 4-byte function selector (e.g. ``bytes.fromhex("d09de08a")``
-            for ``increment()``). Use ``b"\\x00\\x00\\x00\\x00"`` for all functions
-            on the target.
+        target: Contract address the key is allowed to call (hex string or bytes).
+        selector: 4-byte function selector (e.g. ``bytes.fromhex("a9059cbb")``
+            for ``transfer()``). Use ``b"\\x00\\x00\\x00\\x00"`` for all functions
+            on the target (required for non-TIP20 targets).
     """
 
     target: str
     selector: bytes
+
+    def __post_init__(self):
+        if len(self.selector) != 4:
+            raise ValueError(
+                f"selector must be exactly 4 bytes, got {len(self.selector)}"
+            )
 
 
 @dataclass
