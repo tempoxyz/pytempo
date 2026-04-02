@@ -1,6 +1,8 @@
 """Strongly-typed data models for Tempo transactions."""
 
-from typing import Optional
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Optional, Union
 
 import attrs
 import rlp
@@ -17,19 +19,15 @@ from .types import (
     as_optional_address,
 )
 
+if TYPE_CHECKING:
+    from .keychain import KeychainSignature, SignedKeyAuthorization
+
 
 def _validate_call_value(
     instance: "Call", attribute: attrs.Attribute, value: int
 ) -> None:
     if value < 0:
         raise ValueError("call.value must be >= 0")
-
-
-def _validate_call_to(
-    instance: "Call", attribute: attrs.Attribute, value: Address
-) -> None:
-    if len(bytes(value)) not in (0, 20):
-        raise ValueError("call.to must be 20 bytes (or empty for contract creation)")
 
 
 @attrs.define(frozen=True)
@@ -226,16 +224,14 @@ class TempoTransaction:
     )
     awaiting_fee_payer: bool = False
 
-    fee_payer_signature: Optional[Signature | bytes] = None
-    sender_signature: Optional[Signature | bytes] = None
+    fee_payer_signature: Optional[Signature] = None
+    sender_signature: Optional[Union[Signature, KeychainSignature]] = None
 
     tempo_authorization_list: tuple[bytes, ...] = attrs.field(
         factory=tuple, converter=_convert_tempo_auth_list
     )
 
-    key_authorization: Optional[bytes] = attrs.field(
-        default=None, converter=lambda x: as_bytes(x) if x is not None else None
-    )
+    key_authorization: Optional[SignedKeyAuthorization] = None
 
     # -------------------------------------------------------------------------
     # Factory methods
@@ -258,30 +254,9 @@ class TempoTransaction:
         calls: tuple[Call, ...] = (),
         access_list: tuple[AccessListItem, ...] = (),
         tempo_authorization_list: tuple[BytesLike, ...] = (),
-        key_authorization: Optional[BytesLike] = None,
-    ) -> "TempoTransaction":
-        """
-        Create a transaction with automatic type coercion.
-
-        Args:
-            chain_id: Chain ID (default: 1)
-            gas_limit: Gas limit (default: 21_000)
-            max_fee_per_gas: Max fee per gas in wei
-            max_priority_fee_per_gas: Max priority fee per gas in wei
-            nonce: Transaction nonce
-            nonce_key: Nonce key for 2D nonce system
-            valid_before: Expiration timestamp (optional)
-            valid_after: Activation timestamp (optional)
-            fee_token: Fee token address as hex string or bytes (optional)
-            awaiting_fee_payer: Whether transaction awaits fee payer signature
-            calls: Tuple of Call objects
-            access_list: Tuple of AccessListItem objects
-            tempo_authorization_list: Tuple of authorization bytes
-            key_authorization: Signed key authorization bytes (optional)
-
-        Returns:
-            New TempoTransaction instance
-        """
+        key_authorization: Optional[SignedKeyAuthorization] = None,
+    ) -> TempoTransaction:
+        """Create a transaction with automatic type coercion."""
         return cls(
             chain_id=chain_id,
             gas_limit=gas_limit,
@@ -448,8 +423,7 @@ class TempoTransaction:
         ]
 
         if self.key_authorization is not None:
-            key_auth_decoded = rlp.decode(self.key_authorization)
-            fields.append(key_auth_decoded)
+            fields.append(self.key_authorization.as_rlp_payload())
 
         return keccak(bytes([self.TRANSACTION_TYPE]) + rlp.encode(fields))
 
@@ -473,37 +447,20 @@ class TempoTransaction:
         ]
 
         if self.key_authorization is not None:
-            key_auth_decoded = rlp.decode(self.key_authorization)
-            fields.append(key_auth_decoded)
+            fields.append(self.key_authorization.as_rlp_payload())
 
         return keccak(bytes([self.FEE_PAYER_MAGIC_BYTE]) + rlp.encode(fields))
 
     def encode(self) -> bytes:
-        """
-        Encode complete transaction: 0x76 || rlp([14 fields])
-
-        Returns:
-            Encoded transaction with type prefix
-        """
+        """Encode complete transaction: ``0x76 || rlp([fields])``."""
         self.validate()
 
-        def sender_sig_to_bytes(sig: Optional[Signature | bytes]) -> bytes:
-            if sig is None:
-                return b""
-            if isinstance(sig, bytes):
-                return sig
-            return sig.to_bytes()
-
-        def fee_payer_sig_to_rlp(sig: Optional[Signature | bytes]) -> list | bytes:
-            """Encode fee_payer_signature as RLP list [v, r, s] or empty bytes."""
-            if sig is None:
-                return b""
-            if isinstance(sig, bytes):
-                return sig
-            return sig.to_rlp_list()
-
-        sender_sig = sender_sig_to_bytes(self.sender_signature)
-        fee_payer_sig = fee_payer_sig_to_rlp(self.fee_payer_signature)
+        sender_sig = self.sender_signature.to_bytes() if self.sender_signature else b""
+        fee_payer_sig = (
+            self.fee_payer_signature.to_rlp_list()
+            if self.fee_payer_signature
+            else b""
+        )
 
         fields = [
             self.chain_id,
@@ -521,12 +478,8 @@ class TempoTransaction:
             list(self.tempo_authorization_list),
         ]
 
-        # key_authorization is a trailing optional field (only include when present)
-        # The field is already RLP-encoded, so we need to decode it first to get the
-        # raw structure, otherwise it gets double-encoded as a bytes string.
         if self.key_authorization is not None:
-            key_auth_decoded = rlp.decode(self.key_authorization)
-            fields.append(key_auth_decoded)
+            fields.append(self.key_authorization.as_rlp_payload())
             fields.append(sender_sig)
         else:
             fields.append(sender_sig)
@@ -540,8 +493,7 @@ class TempoTransaction:
     def vrs(self) -> tuple[Optional[int], Optional[int], Optional[int]]:
         """Get v, r, s values for secp256k1 signatures.
 
-        Returns (None, None, None) if signature is not a Signature object
-        (e.g., for keychain signatures stored as raw bytes).
+        Returns (None, None, None) for keychain signatures.
         """
         if isinstance(self.sender_signature, Signature):
             return (
@@ -551,15 +503,15 @@ class TempoTransaction:
             )
         return (None, None, None)
 
-    def sign(self, private_key: str, for_fee_payer: bool = False) -> "TempoTransaction":
-        """
-        Sign the transaction with secp256k1 private key.
+    def sign(self, private_key: str, for_fee_payer: bool = False) -> TempoTransaction:
+        """Sign the transaction with secp256k1 private key.
 
         Returns a new TempoTransaction with the signature applied.
 
         Args:
-            private_key: Private key as hex string
-            for_fee_payer: If True, sign as fee payer; else sign as sender
+            private_key: Private key as hex string (as used by
+                ``Account.from_key``).
+            for_fee_payer: If True, sign as fee payer; else sign as sender.
         """
         account = Account.from_key(private_key)
 
@@ -575,24 +527,41 @@ class TempoTransaction:
             sender_addr = as_address(account.address)
             return attrs.evolve(self, sender_signature=sig, sender_address=sender_addr)
 
+    def sign_access_key(
+        self,
+        access_key_private_key: str,
+        root_account: str,
+    ) -> TempoTransaction:
+        """Sign the transaction using an access key (Keychain signature).
+
+        Returns a new TempoTransaction with the keychain signature applied.
+
+        Args:
+            access_key_private_key: Private key of the access key (hex string,
+                as used by ``Account.from_key``).
+            root_account: Address of the root account (hex string).
+        """
+        from .keychain import KeychainSignature
+
+        root_addr = as_address(root_account)
+        tx_with_sender = attrs.evolve(self, sender_address=root_addr)
+        msg_hash = tx_with_sender.get_signing_hash(for_fee_payer=False)
+        sig = KeychainSignature.sign(msg_hash, access_key_private_key, root_addr)
+        return attrs.evolve(tx_with_sender, sender_signature=sig)
+
     def to_estimate_gas_request(
         self,
         sender: str,
         key_id: Optional[str] = None,
-        key_authorization: Optional[dict] = None,
+        key_authorization: Optional[Union[dict, SignedKeyAuthorization]] = None,
     ) -> dict:
         """Build an eth_estimateGas request dict from this transaction.
 
         Args:
-            sender: Address of the sender (hex string)
-            key_id: Optional access key address for keychain signature gas estimation
-            key_authorization: Optional SignedKeyAuthorization.to_json() dict
-
-        Returns:
-            Dict suitable for w3.eth.estimate_gas()
-
-        Example:
-            >>> gas = w3.eth.estimate_gas(tx.to_estimate_gas_request(sender))
+            sender: Address of the sender (hex string).
+            key_id: Optional access key address for keychain signature gas estimation.
+            key_authorization: Optional :class:`SignedKeyAuthorization` or
+                pre-built JSON dict.
         """
         if not self.calls:
             raise ValueError("Transaction must have at least one call")
@@ -619,6 +588,9 @@ class TempoTransaction:
             request["keyId"] = key_id
 
         if key_authorization is not None:
-            request["keyAuthorization"] = key_authorization
+            if isinstance(key_authorization, dict):
+                request["keyAuthorization"] = key_authorization
+            else:
+                request["keyAuthorization"] = key_authorization.to_json()
 
         return request
