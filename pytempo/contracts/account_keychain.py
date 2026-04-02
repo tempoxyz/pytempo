@@ -5,11 +5,20 @@ Returns :class:`~pytempo.Call` objects ready to use in a
 
     from pytempo.contracts import AccountKeychain
 
+    # T3+ (TIP-1011): KeyRestrictions struct
     call = AccountKeychain.authorize_key(
         key_id=access_key.address,
         signature_type=0,
         expiry=2**64 - 1,
     )
+
+    # Pre-T3 (legacy): flat params
+    call = AccountKeychain.authorize_key_legacy(
+        key_id=access_key.address,
+        signature_type=0,
+        expiry=2**64 - 1,
+    )
+
     tx = TempoTransaction.create(..., calls=(call,))
 """
 
@@ -41,8 +50,42 @@ class AccountKeychain:
         expiry: int,
         enforce_limits: bool = False,
         limits: Optional[Sequence[tuple[str, int]]] = None,
+        allow_any_calls: bool = True,
+        allowed_calls: Optional[Sequence[tuple[str, bytes]]] = None,
     ) -> Call:
-        """Build an ``authorizeKey(address,uint8,uint64,bool,(address,uint256)[])`` call.
+        """Build a TIP-1011 ``authorizeKey(address,uint8,KeyRestrictions)`` call (T3+).
+
+        Args:
+            key_id: The access key address to authorize.
+            signature_type: 0 = Secp256k1, 1 = P256, 2 = WebAuthn.
+            expiry: Unix timestamp when key expires (use ``2**64 - 1`` for never).
+            enforce_limits: Whether to enforce spending limits.
+            limits: List of ``(token_address, amount)`` tuples for spending limits.
+            allow_any_calls: Whether the key can call any contract (default True).
+            allowed_calls: List of ``(target_address, selector_bytes4)`` tuples
+                restricting which contracts/functions the key can call.
+                Only used when ``allow_any_calls`` is False.
+        """
+        limit_tuples = list(limits) if limits else []
+        call_tuples = list(allowed_calls) if allowed_calls else []
+        config = (expiry, enforce_limits, limit_tuples, allow_any_calls, call_tuples)
+        data = encode_calldata(
+            _ABI,
+            "authorizeKey",
+            [key_id, signature_type, config],
+        )
+        return Call.create(to=ACCOUNT_KEYCHAIN_ADDRESS, data=data)
+
+    @staticmethod
+    def authorize_key_legacy(
+        *,
+        key_id: str,
+        signature_type: int,
+        expiry: int,
+        enforce_limits: bool = False,
+        limits: Optional[Sequence[tuple[str, int]]] = None,
+    ) -> Call:
+        """Build a legacy ``authorizeKey(address,uint8,uint64,bool,(address,uint256)[])`` call (pre-T3).
 
         Args:
             key_id: The access key address to authorize.

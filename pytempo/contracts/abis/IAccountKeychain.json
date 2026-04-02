@@ -133,6 +133,17 @@
   {
     "inputs": [
       {
+        "internalType": "bytes4",
+        "name": "newSelector",
+        "type": "bytes4"
+      }
+    ],
+    "name": "LegacyAuthorizeKeySelectorChanged",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "address",
         "name": "keyId",
         "type": "address"
@@ -168,6 +179,80 @@
         "internalType": "struct IAccountKeychain.TokenLimit[]",
         "name": "limits",
         "type": "tuple[]"
+      }
+    ],
+    "name": "authorizeKey",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "keyId",
+        "type": "address"
+      },
+      {
+        "internalType": "enum IAccountKeychain.SignatureType",
+        "name": "signatureType",
+        "type": "uint8"
+      },
+      {
+        "components": [
+          {
+            "internalType": "uint64",
+            "name": "expiry",
+            "type": "uint64"
+          },
+          {
+            "internalType": "bool",
+            "name": "enforceLimits",
+            "type": "bool"
+          },
+          {
+            "components": [
+              {
+                "internalType": "address",
+                "name": "token",
+                "type": "address"
+              },
+              {
+                "internalType": "uint256",
+                "name": "amount",
+                "type": "uint256"
+              }
+            ],
+            "internalType": "struct IAccountKeychain.TokenLimit[]",
+            "name": "limits",
+            "type": "tuple[]"
+          },
+          {
+            "internalType": "bool",
+            "name": "allowAnyCalls",
+            "type": "bool"
+          },
+          {
+            "components": [
+              {
+                "internalType": "address",
+                "name": "target",
+                "type": "address"
+              },
+              {
+                "internalType": "bytes4",
+                "name": "selector",
+                "type": "bytes4"
+              }
+            ],
+            "internalType": "struct IAccountKeychain.CallScope[]",
+            "name": "allowedCalls",
+            "type": "tuple[]"
+          }
+        ],
+        "internalType": "struct IAccountKeychain.KeyRestrictions",
+        "name": "config",
+        "type": "tuple"
       }
     ],
     "name": "authorizeKey",
