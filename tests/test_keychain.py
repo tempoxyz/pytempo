@@ -119,6 +119,129 @@ class TestGetRemainingLimit:
             )
 
 
+class TestGetKey:
+    """Tests for AccountKeychain.get_key."""
+
+    def _build_result(
+        self,
+        sig_type=0,
+        key_id_hex="b" * 40,
+        expiry=1893456000,
+        enforce_limits=0,
+        is_revoked=0,
+    ):
+        key_id = bytes.fromhex(key_id_hex)
+        return (
+            sig_type.to_bytes(32, "big")
+            + (b"\x00" * 12 + key_id)
+            + expiry.to_bytes(32, "big")
+            + enforce_limits.to_bytes(32, "big")
+            + is_revoked.to_bytes(32, "big")
+        )
+
+    def test_parses_key_info(self):
+        """Should parse getKey result into a dict."""
+        mock_w3 = MagicMock()
+        mock_w3.eth.call.return_value = self._build_result()
+
+        info = AccountKeychain.get_key(
+            mock_w3,
+            account_address="0x" + "a" * 40,
+            key_id="0x" + "b" * 40,
+        )
+
+        assert info["signature_type"] == 0
+        assert info["key_id"].lower() == ("0x" + "b" * 40).lower()
+        assert info["expiry"] == 1893456000
+        assert info["enforce_limits"] is False
+        assert info["is_revoked"] is False
+
+    def test_parses_p256_signature_type(self):
+        """Should decode non-zero signature types."""
+        mock_w3 = MagicMock()
+        mock_w3.eth.call.return_value = self._build_result(sig_type=1)
+
+        info = AccountKeychain.get_key(
+            mock_w3,
+            account_address="0x" + "a" * 40,
+            key_id="0x" + "b" * 40,
+        )
+
+        assert info["signature_type"] == 1
+
+    def test_parses_revoked_key(self):
+        """Should detect revoked keys."""
+        mock_w3 = MagicMock()
+        mock_w3.eth.call.return_value = self._build_result(is_revoked=1)
+
+        info = AccountKeychain.get_key(
+            mock_w3,
+            account_address="0x" + "a" * 40,
+            key_id="0x" + "b" * 40,
+        )
+
+        assert info["is_revoked"] is True
+
+    def test_parses_enforce_limits(self):
+        """Should detect enforce_limits=true."""
+        mock_w3 = MagicMock()
+        mock_w3.eth.call.return_value = self._build_result(enforce_limits=1)
+
+        info = AccountKeychain.get_key(
+            mock_w3,
+            account_address="0x" + "a" * 40,
+            key_id="0x" + "b" * 40,
+        )
+
+        assert info["enforce_limits"] is True
+
+    def test_raises_on_empty_account(self):
+        """Should raise ValueError if account_address is empty."""
+        mock_w3 = MagicMock()
+
+        with pytest.raises(ValueError):
+            AccountKeychain.get_key(
+                mock_w3,
+                account_address="",
+                key_id="0x" + "b" * 40,
+            )
+
+    def test_raises_on_empty_key_id(self):
+        """Should raise ValueError if key_id is empty."""
+        mock_w3 = MagicMock()
+
+        with pytest.raises(ValueError):
+            AccountKeychain.get_key(
+                mock_w3,
+                account_address="0x" + "a" * 40,
+                key_id="",
+            )
+
+    def test_raises_on_short_result(self):
+        """Should raise ValueError if result is too short."""
+        mock_w3 = MagicMock()
+        mock_w3.eth.call.return_value = b"\x00" * 100
+
+        with pytest.raises(ValueError, match="wrong length"):
+            AccountKeychain.get_key(
+                mock_w3,
+                account_address="0x" + "a" * 40,
+                key_id="0x" + "b" * 40,
+            )
+
+    def test_raises_on_long_result(self):
+        """Should raise ValueError if result is too long."""
+        mock_w3 = MagicMock()
+        mock_w3.eth.call.return_value = b"\x00" * 192
+
+        with pytest.raises(ValueError, match="wrong length"):
+            AccountKeychain.get_key(
+                mock_w3,
+                account_address="0x" + "a" * 40,
+                key_id="0x" + "b" * 40,
+            )
+
+
 class TestKeychainSignatureFormat:
     """Tests for Keychain signature format correctness."""
 
