@@ -71,29 +71,9 @@ def w3(rpc_url):
 
 
 @pytest.fixture(scope="module")
-def is_t3(w3):
-    """Detect whether the connected node has T3 hardfork active.
-
-    Probes the AccountKeychain precompile with the T3 authorizeKey selector.
-    If the node returns UnknownFunctionSelector, T3 is not active.
-    """
-    try:
-        # Call with minimal valid T3 authorizeKey calldata
-        # selector 0x980a6025 = authorizeKey(address,uint8,KeyRestrictions)
-        w3.eth.call(
-            {
-                "to": "0xAAAAAAAA00000000000000000000000000000000",
-                "data": "0x980a6025",
-            }
-        )
-    except Exception as e:
-        error_data = str(e)
-        # UnknownFunctionSelector means T3 is not active
-        if "UnknownFunctionSelector" in error_data or "19f191e2" in error_data:
-            return False
-        # Any other revert (e.g. missing args) means the selector IS recognized = T3
-        return True
-    return True
+def is_t2():
+    """Check if running against a T2 network via TEMPO_HARDFORK env var (default T3)."""
+    return os.environ.get("TEMPO_HARDFORK", "T3") == "T2"
 
 
 @pytest.fixture(scope="module")
@@ -801,7 +781,7 @@ class TestKeychainSelectors:
     authorizeKey → getKey → revokeKey round-trip via the precompile.
     """
 
-    def test_authorize_get_revoke_round_trip(self, w3, chain_id, funded_account, is_t3):
+    def test_authorize_get_revoke_round_trip(self, w3, chain_id, funded_account, is_t2):
         """Authorize an access key, verify via getKey, revoke, verify revoked."""
         max_fee, priority_fee = get_gas_params(w3)
 
@@ -817,7 +797,7 @@ class TestKeychainSelectors:
             expiry=expiry,
             enforce_limits=False,
             limits=[],
-            legacy=not is_t3,
+            legacy=is_t2,
         )
         tx = TempoTransaction.create(
             chain_id=chain_id,
