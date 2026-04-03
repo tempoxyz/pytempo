@@ -71,6 +71,24 @@ def w3(rpc_url):
 
 
 @pytest.fixture(scope="module")
+def is_t3(w3):
+    """Detect whether the connected node has T3 hardfork active."""
+    try:
+        block = w3.eth.get_block("latest")
+        config = w3.provider.make_request("eth_getBlockByNumber", ["0x0", False])
+        t3_time = config.get("result", {}).get("t3Time")
+        if t3_time is not None:
+            return (
+                block["timestamp"] >= int(t3_time, 16)
+                if isinstance(t3_time, str)
+                else block["timestamp"] >= t3_time
+            )
+    except Exception:
+        pass
+    return False
+
+
+@pytest.fixture(scope="module")
 def chain_id(w3):
     """Get the chain ID from the connected node."""
     return w3.eth.chain_id
@@ -775,7 +793,7 @@ class TestKeychainSelectors:
     authorizeKey → getKey → revokeKey round-trip via the precompile.
     """
 
-    def test_authorize_get_revoke_round_trip(self, w3, chain_id, funded_account):
+    def test_authorize_get_revoke_round_trip(self, w3, chain_id, funded_account, is_t3):
         """Authorize an access key, verify via getKey, revoke, verify revoked."""
         max_fee, priority_fee = get_gas_params(w3)
 
@@ -791,6 +809,7 @@ class TestKeychainSelectors:
             expiry=expiry,
             enforce_limits=False,
             limits=[],
+            legacy=not is_t3,
         )
         tx = TempoTransaction.create(
             chain_id=chain_id,
