@@ -133,17 +133,6 @@
   {
     "inputs": [
       {
-        "internalType": "bytes4",
-        "name": "newSelector",
-        "type": "bytes4"
-      }
-    ],
-    "name": "LegacyAuthorizeKeySelectorChanged",
-    "type": "error"
-  },
-  {
-    "inputs": [
-      {
         "internalType": "address",
         "name": "keyId",
         "type": "address"

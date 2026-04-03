@@ -941,7 +941,7 @@ class TestKeyAuthorizationWithLimits:
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
             calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
-            key_authorization=signed_auth.rlp_encode(),
+            key_authorization=signed_auth,
         )
 
         gas_estimate = w3.eth.estimate_gas(
@@ -960,7 +960,7 @@ class TestKeyAuthorizationWithLimits:
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
             calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
-            key_authorization=signed_auth.rlp_encode(),
+            key_authorization=signed_auth,
         )
 
         signed_tx = sign_tx_access_key(

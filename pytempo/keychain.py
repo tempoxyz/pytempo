@@ -223,8 +223,10 @@ class KeyAuthorization:
         items: list = [self.chain_id, int(self.key_type), bytes(self.key_id)]
 
         # Add optional trailing fields
-        if self.expiry is not None or self.limits is not None:
-            items.append(self.expiry if self.expiry is not None else b"")
+        # expiry=0 is treated the same as expiry=None (never expires)
+        has_expiry = self.expiry is not None and self.expiry != 0
+        if has_expiry or self.limits is not None:
+            items.append(self.expiry if has_expiry else b"")
 
         if self.limits is not None:
             items.append([limit.to_rlp() for limit in self.limits])
