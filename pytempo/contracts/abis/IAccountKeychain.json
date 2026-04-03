@@ -221,6 +221,11 @@
                 "internalType": "uint256",
                 "name": "amount",
                 "type": "uint256"
+              },
+              {
+                "internalType": "uint64",
+                "name": "period",
+                "type": "uint64"
               }
             ],
             "internalType": "struct IAccountKeychain.TokenLimit[]",
@@ -240,9 +245,21 @@
                 "type": "address"
               },
               {
-                "internalType": "bytes4",
-                "name": "selector",
-                "type": "bytes4"
+                "components": [
+                  {
+                    "internalType": "bytes4",
+                    "name": "selector",
+                    "type": "bytes4"
+                  },
+                  {
+                    "internalType": "address[]",
+                    "name": "recipients",
+                    "type": "address[]"
+                  }
+                ],
+                "internalType": "struct IAccountKeychain.SelectorRule[]",
+                "name": "selectorRules",
+                "type": "tuple[]"
               }
             ],
             "internalType": "struct IAccountKeychain.CallScope[]",
@@ -388,5 +405,189 @@
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "keyId",
+        "type": "address"
+      },
+      {
+        "components": [
+          {
+            "internalType": "address",
+            "name": "target",
+            "type": "address"
+          },
+          {
+            "components": [
+              {
+                "internalType": "bytes4",
+                "name": "selector",
+                "type": "bytes4"
+              },
+              {
+                "internalType": "address[]",
+                "name": "recipients",
+                "type": "address[]"
+              }
+            ],
+            "internalType": "struct IAccountKeychain.SelectorRule[]",
+            "name": "selectorRules",
+            "type": "tuple[]"
+          }
+        ],
+        "internalType": "struct IAccountKeychain.CallScope[]",
+        "name": "scopes",
+        "type": "tuple[]"
+      }
+    ],
+    "name": "setAllowedCalls",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "keyId",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "target",
+        "type": "address"
+      }
+    ],
+    "name": "removeAllowedCalls",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "keyId",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "token",
+        "type": "address"
+      }
+    ],
+    "name": "getRemainingLimitWithPeriod",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "remaining",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint64",
+        "name": "periodEnd",
+        "type": "uint64"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "keyId",
+        "type": "address"
+      }
+    ],
+    "name": "getAllowedCalls",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "isScoped",
+        "type": "bool"
+      },
+      {
+        "components": [
+          {
+            "internalType": "address",
+            "name": "target",
+            "type": "address"
+          },
+          {
+            "components": [
+              {
+                "internalType": "bytes4",
+                "name": "selector",
+                "type": "bytes4"
+              },
+              {
+                "internalType": "address[]",
+                "name": "recipients",
+                "type": "address[]"
+              }
+            ],
+            "internalType": "struct IAccountKeychain.SelectorRule[]",
+            "name": "selectorRules",
+            "type": "tuple[]"
+          }
+        ],
+        "internalType": "struct IAccountKeychain.CallScope[]",
+        "name": "scopes",
+        "type": "tuple[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "publicKey",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "token",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "remainingLimit",
+        "type": "uint256"
+      }
+    ],
+    "name": "AccessKeySpend",
+    "type": "event"
   }
 ]

@@ -27,7 +27,7 @@ Format: ``[chain_id, key_type, key_id, expiry?, limits?]``
 from __future__ import annotations
 
 from enum import IntEnum
-from typing import TYPE_CHECKING, ClassVar, Optional
+from typing import TYPE_CHECKING, ClassVar
 
 import attrs
 import rlp
@@ -178,13 +178,13 @@ class CallScope:
 
 
 def _convert_limits(
-    value: Optional[tuple[TokenLimit, ...] | list[TokenLimit]],
-) -> Optional[tuple[TokenLimit, ...]]:
+    value: tuple[TokenLimit, ...] | list[TokenLimit] | None,
+) -> tuple[TokenLimit, ...] | None:
     return None if value is None else tuple(value)
 
 
 def _validate_optional_expiry(
-    instance: object, attribute: object, value: Optional[int]
+    instance: object, attribute: object, value: int | None
 ) -> None:
     if value is not None and value < 0:
         raise ValueError(f"expiry must be >= 0, got {value}")
@@ -212,10 +212,8 @@ class KeyAuthorization:
     key_type: SignatureType = attrs.field(
         default=SignatureType.SECP256K1, converter=SignatureType
     )
-    expiry: Optional[int] = attrs.field(
-        default=None, validator=_validate_optional_expiry
-    )
-    limits: Optional[tuple[TokenLimit, ...]] = attrs.field(
+    expiry: int | None = attrs.field(default=None, validator=_validate_optional_expiry)
+    limits: tuple[TokenLimit, ...] | None = attrs.field(
         default=None, converter=_convert_limits
     )
 
@@ -275,7 +273,7 @@ class SignedKeyAuthorization:
     """
 
     authorization: KeyAuthorization
-    signature: "Signature"  # from .models
+    signature: Signature  # from .models
 
     @property
     def v(self) -> int:
@@ -362,7 +360,7 @@ class KeychainSignature:
     root_account: Address = attrs.field(
         converter=as_address, validator=validate_nonempty_address
     )
-    inner: "Signature"  # from .models
+    inner: Signature  # from .models
 
     def to_bytes(self) -> bytes:
         return (
@@ -441,8 +439,8 @@ def create_key_authorization(
     key_id: str,
     chain_id: int = 0,
     key_type: int = SignatureType.SECP256K1,
-    expiry: Optional[int] = None,
-    limits: Optional[list[dict]] = None,
+    expiry: int | None = None,
+    limits: list[dict] | None = None,
 ) -> KeyAuthorization:
     """Create a key authorization for provisioning an access key.
 
@@ -481,10 +479,10 @@ def build_keychain_signature(
 
 
 def sign_tx_access_key(
-    tx: "TempoTransaction",
+    tx: TempoTransaction,
     access_key_private_key: str,
     root_account: str,
-) -> "TempoTransaction":
+) -> TempoTransaction:
     """Sign a Tempo transaction using access key mode (Keychain signature).
 
     .. deprecated::

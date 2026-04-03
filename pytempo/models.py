@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING
 
 import attrs
 import rlp
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
 
 def _validate_call_value(
-    instance: "Call", attribute: attrs.Attribute, value: int
+    instance: Call, attribute: attrs.Attribute, value: int
 ) -> None:
     if value < 0:
         raise ValueError("call.value must be >= 0")
@@ -47,13 +47,13 @@ class Call:
         to: BytesLike,
         value: int = 0,
         data: BytesLike = b"",
-    ) -> "Call":
+    ) -> Call:
         """Create a Call with automatic type coercion."""
         return cls(to=to, value=value, data=data)
 
 
 def _validate_access_list_address(
-    instance: "AccessListItem", attribute: attrs.Attribute, value: Address
+    instance: AccessListItem, attribute: attrs.Attribute, value: Address
 ) -> None:
     if len(bytes(value)) != 20:
         raise ValueError("access list address must be 20 bytes")
@@ -82,7 +82,7 @@ class AccessListItem:
         cls,
         address: BytesLike,
         storage_keys: tuple[BytesLike, ...] = (),
-    ) -> "AccessListItem":
+    ) -> AccessListItem:
         """Create an AccessListItem with automatic type coercion."""
         return cls(address=address, storage_keys=storage_keys)
 
@@ -92,14 +92,14 @@ SECP256K1_HALF_N = SECP256K1_N // 2
 
 
 def _validate_signature_r(
-    instance: "Signature", attribute: attrs.Attribute, value: int
+    instance: Signature, attribute: attrs.Attribute, value: int
 ) -> None:
     if not (0 < value < SECP256K1_N):
         raise ValueError(f"signature r must be in range (0, secp256k1_n), got {value}")
 
 
 def _validate_signature_s(
-    instance: "Signature", attribute: attrs.Attribute, value: int
+    instance: Signature, attribute: attrs.Attribute, value: int
 ) -> None:
     if not (0 < value <= SECP256K1_HALF_N):
         raise ValueError(
@@ -108,7 +108,7 @@ def _validate_signature_s(
 
 
 def _validate_signature_v(
-    instance: "Signature", attribute: attrs.Attribute, value: int
+    instance: Signature, attribute: attrs.Attribute, value: int
 ) -> None:
     if value not in (0, 1, 27, 28):
         raise ValueError(f"signature v must be 0, 1, 27, or 28, got {value}")
@@ -140,7 +140,7 @@ class Signature:
         return [v_normalized, self.r, self.s]
 
     @classmethod
-    def from_bytes(cls, sig_bytes: bytes) -> "Signature":
+    def from_bytes(cls, sig_bytes: bytes) -> Signature:
         """Parse a 65-byte signature and validate r/s/v ranges.
 
         Raises:
@@ -212,26 +212,24 @@ class TempoTransaction:
     nonce_key: int = 0
     nonce: int = 0
 
-    valid_before: Optional[int] = None
-    valid_after: Optional[int] = None
+    valid_before: int | None = None
+    valid_after: int | None = None
 
-    fee_token: Optional[Address] = attrs.field(
-        default=None, converter=as_optional_address
-    )
+    fee_token: Address | None = attrs.field(default=None, converter=as_optional_address)
 
-    sender_address: Optional[Address] = attrs.field(
+    sender_address: Address | None = attrs.field(
         default=None, converter=as_optional_address
     )
     awaiting_fee_payer: bool = False
 
-    fee_payer_signature: Optional[Signature] = None
-    sender_signature: Optional[Union[Signature, KeychainSignature]] = None
+    fee_payer_signature: Signature | None = None
+    sender_signature: Signature | KeychainSignature | None = None
 
     tempo_authorization_list: tuple[bytes, ...] = attrs.field(
         factory=tuple, converter=_convert_tempo_auth_list
     )
 
-    key_authorization: Optional[SignedKeyAuthorization] = None
+    key_authorization: SignedKeyAuthorization | None = None
 
     # -------------------------------------------------------------------------
     # Factory methods
@@ -247,14 +245,14 @@ class TempoTransaction:
         max_priority_fee_per_gas: int = 0,
         nonce: int = 0,
         nonce_key: int = 0,
-        valid_before: Optional[int] = None,
-        valid_after: Optional[int] = None,
-        fee_token: Optional[BytesLike] = None,
+        valid_before: int | None = None,
+        valid_after: int | None = None,
+        fee_token: BytesLike | None = None,
         awaiting_fee_payer: bool = False,
         calls: tuple[Call, ...] = (),
         access_list: tuple[AccessListItem, ...] = (),
         tempo_authorization_list: tuple[BytesLike, ...] = (),
-        key_authorization: Optional[SignedKeyAuthorization] = None,
+        key_authorization: SignedKeyAuthorization | None = None,
     ) -> TempoTransaction:
         """Create a transaction with automatic type coercion."""
         return cls(
@@ -275,7 +273,7 @@ class TempoTransaction:
         )
 
     @classmethod
-    def from_dict(cls, d: dict) -> "TempoTransaction":
+    def from_dict(cls, d: dict) -> TempoTransaction:
         """
         Parse a transaction from a dict with camelCase or snake_case keys.
 
@@ -383,7 +381,7 @@ class TempoTransaction:
     def _has_fee_payer(self) -> bool:
         return self.fee_payer_signature is not None or self.awaiting_fee_payer
 
-    def _encode_optional_uint(self, v: Optional[int]) -> bytes | int:
+    def _encode_optional_uint(self, v: int | None) -> bytes | int:
         return b"" if v is None else v
 
     def get_signing_hash(self, for_fee_payer: bool = False) -> bytes:
@@ -457,9 +455,7 @@ class TempoTransaction:
 
         sender_sig = self.sender_signature.to_bytes() if self.sender_signature else b""
         fee_payer_sig = (
-            self.fee_payer_signature.to_rlp_list()
-            if self.fee_payer_signature
-            else b""
+            self.fee_payer_signature.to_rlp_list() if self.fee_payer_signature else b""
         )
 
         fields = [
@@ -490,7 +486,7 @@ class TempoTransaction:
         """Get transaction hash."""
         return keccak(self.encode())
 
-    def vrs(self) -> tuple[Optional[int], Optional[int], Optional[int]]:
+    def vrs(self) -> tuple[int | None, int | None, int | None]:
         """Get v, r, s values for secp256k1 signatures.
 
         Returns (None, None, None) for keychain signatures.
@@ -552,8 +548,8 @@ class TempoTransaction:
     def to_estimate_gas_request(
         self,
         sender: str,
-        key_id: Optional[str] = None,
-        key_authorization: Optional[Union[dict, SignedKeyAuthorization]] = None,
+        key_id: str | None = None,
+        key_authorization: dict | SignedKeyAuthorization | None = None,
     ) -> dict:
         """Build an eth_estimateGas request dict from this transaction.
 

@@ -462,9 +462,7 @@ class TestKeychainSignatureType:
 
     def test_frozen(self):
         """KeychainSignature should be immutable."""
-        sig = KeychainSignature.sign(
-            b"\x00" * 32, "0x" + "a" * 64, "0x" + "b" * 40
-        )
+        sig = KeychainSignature.sign(b"\x00" * 32, "0x" + "a" * 64, "0x" + "b" * 40)
         with pytest.raises(AttributeError):
             sig.root_account = b"\x00" * 20  # type: ignore[misc]
 
@@ -614,7 +612,8 @@ class TestKeyAuthorization:
 
     def test_frozen(self):
         auth = KeyAuthorization(
-            key_id="0x" + "b" * 40, chain_id=42429,
+            key_id="0x" + "b" * 40,
+            chain_id=42429,
         )
         with pytest.raises(AttributeError):
             auth.chain_id = 1  # type: ignore[misc]

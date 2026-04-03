@@ -54,7 +54,7 @@ class AccountKeychain:
         signature_type: SignatureType,
         expiry: int,
         enforce_limits: bool = False,
-        limits: Optional[Sequence[tuple[str, int]]] = None,
+        limits: Optional[Sequence[tuple[str, int] | tuple[str, int, int]]] = None,
         allow_any_calls: bool = True,
         allowed_calls: Optional[Sequence[CallScope]] = None,
         legacy: bool = False,
@@ -69,7 +69,8 @@ class AccountKeychain:
             signature_type: Type of key being authorized (SignatureType.SECP256K1, P256, or WEBAUTHN)
             expiry: Unix timestamp when key expires (use ``2**64 - 1`` for never).
             enforce_limits: Whether to enforce spending limits.
-            limits: List of ``(token_address, amount)`` tuples for spending limits.
+            limits: List of ``(token_address, amount)`` or ``(token_address, amount, period)`` tuples.
+                Period defaults to 0 (one-time limit) if omitted.
             allow_any_calls: Whether the key can call any contract (default True).
                 Ignored when ``legacy=True``.
             allowed_calls: List of :class:`~pytempo.CallScope` restricting
@@ -78,17 +79,25 @@ class AccountKeychain:
                 Ignored when ``legacy=True``.
             legacy: Use pre-T3 flat-parameter encoding. Pass ``True`` until T3 is activated, then remove this argument.
         """
-        limit_tuples = list(limits) if limits else []
-
         if legacy:
+            limit_tuples = (
+                [(t, a) for t, a, *_ in ((*lim, 0)[:3] for lim in limits)]
+                if limits
+                else []
+            )
             data = encode_calldata(
                 _ABI,
                 "authorizeKey",
                 [key_id, int(signature_type), expiry, enforce_limits, limit_tuples],
             )
         else:
+            limit_tuples = (
+                [(t, a, p) for t, a, p in ((*lim, 0)[:3] for lim in limits)]
+                if limits
+                else []
+            )
             call_tuples = (
-                [(bytes(s.target), bytes(s.selector)) for s in allowed_calls]
+                [(bytes(s.target), [(bytes(s.selector), [])]) for s in allowed_calls]
                 if allowed_calls
                 else []
             )
