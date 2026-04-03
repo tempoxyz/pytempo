@@ -27,6 +27,8 @@ Returns :class:`~pytempo.Call` objects ready to use in a
 from collections.abc import Sequence
 from typing import Optional
 
+from eth_utils import to_checksum_address
+
 from pytempo.keychain import CallScope, SignatureType
 from pytempo.models import Call
 
@@ -116,6 +118,48 @@ class AccountKeychain:
         """Build an ``updateSpendingLimit(address,address,uint256)`` call."""
         data = encode_calldata(_ABI, "updateSpendingLimit", [key_id, token, new_limit])
         return Call.create(to=ACCOUNT_KEYCHAIN_ADDRESS, data=data)
+
+    @staticmethod
+    def get_key(
+        w3,
+        *,
+        account_address: str,
+        key_id: str,
+    ) -> dict:
+        """Query key info from the AccountKeychain precompile.
+
+        Args:
+            w3: Web3 instance connected to a Tempo RPC.
+            account_address: The root wallet address.
+            key_id: The access key ID (address).
+
+        Returns:
+            Dict with ``signature_type``, ``key_id``, ``expiry``,
+            ``enforce_limits``, and ``is_revoked`` fields.
+
+        Raises:
+            ValueError: If any address parameter is empty or result is wrong length.
+        """
+        if not account_address or not key_id:
+            raise ValueError("account_address and key_id are required")
+
+        call_data = encode_calldata(_ABI, "getKey", [account_address, key_id])
+        result = bytes(w3.eth.call({"to": ACCOUNT_KEYCHAIN_ADDRESS, "data": call_data}))
+
+        if len(result) != 160:
+            raise ValueError(
+                f"getKey result wrong length, expected 160 bytes, got {len(result)}"
+            )
+
+        words = [result[i : i + 32] for i in range(0, 160, 32)]
+
+        return {
+            "signature_type": int.from_bytes(words[0], "big"),
+            "key_id": to_checksum_address(words[1][-20:]),
+            "expiry": int.from_bytes(words[2], "big"),
+            "enforce_limits": bool(int.from_bytes(words[3], "big")),
+            "is_revoked": bool(int.from_bytes(words[4], "big")),
+        }
 
     @staticmethod
     def get_remaining_limit(
