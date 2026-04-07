@@ -227,16 +227,16 @@ class CallScope:
         cls,
         *,
         target: BytesLike,
-        recipients: list[BytesLike] | None = None,
+        recipients: list[BytesLike] = (),
     ) -> CallScope:
         """Allow ``transfer(address,uint256)`` on a TIP20 token target.
 
         Args:
             target: TIP20 token address.
-            recipients: Allowed transfer recipients. Empty or None means any recipient.
+            recipients: Allowed transfer recipients. Empty means any recipient.
         """
         addr = _validate_tip20_address(target)
-        rule = SelectorRule(selector=_TIP20_TRANSFER, recipients=recipients or [])
+        rule = SelectorRule(selector=_TIP20_TRANSFER, recipients=recipients)
         return cls(target=addr, selector=_TIP20_TRANSFER, selector_rules=(rule,))
 
     @classmethod
@@ -244,16 +244,16 @@ class CallScope:
         cls,
         *,
         target: BytesLike,
-        recipients: list[BytesLike] | None = None,
+        recipients: list[BytesLike] = (),
     ) -> CallScope:
         """Allow ``approve(address,uint256)`` on a TIP20 token target.
 
         Args:
             target: TIP20 token address.
-            recipients: Allowed spender addresses. Empty or None means any spender.
+            recipients: Allowed spender addresses. Empty means any spender.
         """
         addr = _validate_tip20_address(target)
-        rule = SelectorRule(selector=_TIP20_APPROVE, recipients=recipients or [])
+        rule = SelectorRule(selector=_TIP20_APPROVE, recipients=recipients)
         return cls(target=addr, selector=_TIP20_APPROVE, selector_rules=(rule,))
 
     @classmethod
@@ -261,18 +261,16 @@ class CallScope:
         cls,
         *,
         target: BytesLike,
-        recipients: list[BytesLike] | None = None,
+        recipients: list[BytesLike] = (),
     ) -> CallScope:
         """Allow ``transferWithMemo(address,uint256,bytes32)`` on a TIP20 token target.
 
         Args:
             target: TIP20 token address.
-            recipients: Allowed transfer recipients. Empty or None means any recipient.
+            recipients: Allowed transfer recipients. Empty means any recipient.
         """
         addr = _validate_tip20_address(target)
-        rule = SelectorRule(
-            selector=_TIP20_TRANSFER_WITH_MEMO, recipients=recipients or []
-        )
+        rule = SelectorRule(selector=_TIP20_TRANSFER_WITH_MEMO, recipients=recipients)
         return cls(
             target=addr,
             selector=_TIP20_TRANSFER_WITH_MEMO,
