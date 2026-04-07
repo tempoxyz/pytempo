@@ -64,7 +64,7 @@ class TestTypes:
 
 
 class TestCall:
-    """Test Call dataclass."""
+    """Test Call model."""
 
     def test_create_call(self):
         call = Call.create(
@@ -88,7 +88,7 @@ class TestCall:
 
 
 class TestAccessListItem:
-    """Test AccessListItem dataclass."""
+    """Test AccessListItem model."""
 
     def test_create_access_list_item(self):
         item = AccessListItem.create(
@@ -101,7 +101,7 @@ class TestAccessListItem:
 
 
 class TestSignature:
-    """Test Signature dataclass."""
+    """Test Signature model."""
 
     def test_signature_to_bytes(self):
         sig = Signature(r=1, s=2, v=27)

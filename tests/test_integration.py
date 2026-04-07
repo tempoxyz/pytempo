@@ -71,6 +71,12 @@ def w3(rpc_url):
 
 
 @pytest.fixture(scope="module")
+def is_t2():
+    """Check if running against a T2 network via TEMPO_HARDFORK env var (default T3)."""
+    return os.environ.get("TEMPO_HARDFORK", "T3") == "T2"
+
+
+@pytest.fixture(scope="module")
 def chain_id(w3):
     """Get the chain ID from the connected node."""
     return w3.eth.chain_id
@@ -396,11 +402,10 @@ class TestAccessKeys:
         expiry = int(time.time()) + 3600
 
         auth = KeyAuthorization(
+            key_id=access_key.address,
             chain_id=chain_id,
             key_type=SignatureType.SECP256K1,
-            key_id=access_key.address,
             expiry=expiry,
-            limits=None,
         )
         signed_auth = auth.sign(funded_account.key.hex())
 
@@ -413,7 +418,7 @@ class TestAccessKeys:
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
             calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
-            key_authorization=signed_auth.rlp_encode(),
+            key_authorization=signed_auth,
         )
 
         # Estimate gas from the transaction
@@ -421,7 +426,7 @@ class TestAccessKeys:
             tx.to_estimate_gas_request(
                 funded_account.address,
                 key_id=access_key.address,
-                key_authorization=signed_auth.to_json(),
+                key_authorization=signed_auth,
             )
         )
 
@@ -434,11 +439,10 @@ class TestAccessKeys:
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
             calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
-            key_authorization=signed_auth.rlp_encode(),
+            key_authorization=signed_auth,
         )
 
-        signed_tx = sign_tx_access_key(
-            tx,
+        signed_tx = tx.sign_access_key(
             access_key_private_key=access_key.key.hex(),
             root_account=funded_account.address,
         )
@@ -459,11 +463,10 @@ class TestAccessKeys:
         expiry = int(time.time()) + 3600
 
         auth = KeyAuthorization(
+            key_id=access_key.address,
             chain_id=chain_id,
             key_type=SignatureType.SECP256K1,
-            key_id=access_key.address,
             expiry=expiry,
-            limits=None,
         )
         signed_auth = auth.sign(funded_account.key.hex())
 
@@ -479,7 +482,7 @@ class TestAccessKeys:
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
             calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
-            key_authorization=signed_auth.rlp_encode(),
+            key_authorization=signed_auth,
         )
 
         # Estimate gas from the transaction
@@ -487,7 +490,7 @@ class TestAccessKeys:
             tx1.to_estimate_gas_request(
                 funded_account.address,
                 key_id=access_key.address,
-                key_authorization=signed_auth.to_json(),
+                key_authorization=signed_auth,
             )
         )
 
@@ -500,11 +503,10 @@ class TestAccessKeys:
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
             calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
-            key_authorization=signed_auth.rlp_encode(),
+            key_authorization=signed_auth,
         )
 
-        signed_tx1 = sign_tx_access_key(
-            tx1,
+        signed_tx1 = tx1.sign_access_key(
             access_key_private_key=access_key.key.hex(),
             root_account=funded_account.address,
         )
@@ -542,8 +544,7 @@ class TestAccessKeys:
             calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
         )
 
-        signed_tx2 = sign_tx_access_key(
-            tx2,
+        signed_tx2 = tx2.sign_access_key(
             access_key_private_key=access_key.key.hex(),
             root_account=funded_account.address,
         )
@@ -780,7 +781,7 @@ class TestKeychainSelectors:
     authorizeKey → getKey → revokeKey round-trip via the precompile.
     """
 
-    def test_authorize_get_revoke_round_trip(self, w3, chain_id, funded_account):
+    def test_authorize_get_revoke_round_trip(self, w3, chain_id, funded_account, is_t2):
         """Authorize an access key, verify via getKey, revoke, verify revoked."""
         max_fee, priority_fee = get_gas_params(w3)
 
@@ -796,6 +797,7 @@ class TestKeychainSelectors:
             expiry=expiry,
             enforce_limits=False,
             limits=[],
+            legacy=is_t2,
         )
         tx = TempoTransaction.create(
             chain_id=chain_id,
@@ -946,7 +948,7 @@ class TestKeyAuthorizationWithLimits:
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
             calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
-            key_authorization=signed_auth.rlp_encode(),
+            key_authorization=signed_auth,
         )
 
         gas_estimate = w3.eth.estimate_gas(
@@ -965,7 +967,7 @@ class TestKeyAuthorizationWithLimits:
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
             calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
-            key_authorization=signed_auth.rlp_encode(),
+            key_authorization=signed_auth,
         )
 
         signed_tx = sign_tx_access_key(

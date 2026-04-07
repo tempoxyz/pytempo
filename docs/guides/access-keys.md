@@ -9,18 +9,18 @@ Create a {py:class}`~pytempo.KeyAuthorization`, sign it with the root account, a
 ```python
 from pytempo import (
     TempoTransaction, Call,
-    create_key_authorization, SignatureType,
+    KeyAuthorization, SignatureType, TokenLimit,
 )
 
 # Create authorization for a new access key
-auth = create_key_authorization(
+auth = KeyAuthorization(
     key_id="0xAccessKeyAddress...",
     chain_id=42429,
     key_type=SignatureType.SECP256K1,
     expiry=1893456000,  # optional: expires ~2030
-    limits=[
-        {"token": "0xUSDCAddress...", "limit": 1000 * 10**6},
-    ],
+    limits=(
+        TokenLimit(token="0xUSDCAddress...", limit=1000 * 10**6),
+    ),
 )
 
 # Sign with root account
@@ -32,16 +32,16 @@ tx = TempoTransaction.create(
     gas_limit=100_000,
     max_fee_per_gas=2_000_000_000,
     calls=(Call.create(to="0xRecipient...", value=1000),),
-    key_authorization=signed_auth.rlp_encode(),
+    key_authorization=signed_auth,
 )
 ```
 
 ## Signing with an access key
 
-Use {py:func}`~pytempo.sign_tx_access_key` to sign a transaction as an access key holder:
+Use {py:meth}`~pytempo.TempoTransaction.sign_access_key` to sign a transaction as an access key holder:
 
 ```python
-from pytempo import TempoTransaction, Call, sign_tx_access_key
+from pytempo import TempoTransaction, Call
 
 tx = TempoTransaction.create(
     chain_id=42429,
@@ -50,8 +50,7 @@ tx = TempoTransaction.create(
     calls=(Call.create(to="0xRecipient...", value=1000),),
 )
 
-signed_tx = sign_tx_access_key(
-    tx,
+signed_tx = tx.sign_access_key(
     access_key_private_key="0xAccessKeyPrivateKey...",
     root_account="0xRootAccountAddress...",
 )
@@ -78,9 +77,44 @@ remaining = AccountKeychain.get_remaining_limit(
 print(f"Remaining: {remaining}")
 ```
 
+## On-chain key authorization with call scopes (T3+)
+
+For on-chain key provisioning via the AccountKeychain precompile, you can restrict which contracts and functions the key is allowed to call:
+
+```python
+from pytempo import CallScope, SignatureType
+from pytempo.contracts import AccountKeychain, ALPHA_USD
+
+call = AccountKeychain.authorize_key(
+    key_id="0xAccessKeyAddress...",
+    signature_type=SignatureType.SECP256K1,
+    expiry=2**64 - 1,
+    allow_any_calls=False,
+    allowed_calls=(
+        CallScope.transfer(target=ALPHA_USD),
+        CallScope.approve(target=ALPHA_USD),
+    ),
+)
+```
+
+Available call scope constructors:
+
+- `CallScope.unrestricted(target=...)` — allow all functions on a target
+- `CallScope.transfer(target=...)` — allow `transfer(address,uint256)` on a TIP20 token
+- `CallScope.approve(target=...)` — allow `approve(address,uint256)` on a TIP20 token
+- `CallScope.transfer_with_memo(target=...)` — allow `transferWithMemo(address,uint256,bytes32)` on a TIP20 token
+
+```{note}
+Before T3 is activated, pass ``legacy=True`` to use the pre-T3 encoding::
+
+    call = AccountKeychain.authorize_key(..., legacy=True)
+
+Remove ``legacy=True`` once T3 is live.
+```
+
 ## Signature types
 
-The {py:class}`~pytempo.SignatureType` constants define supported key types:
+The {py:class}`~pytempo.SignatureType` enum defines supported key types:
 
 | Constant | Value | Description |
 |---|---|---|

@@ -24,7 +24,9 @@ from .keychain import (
     INNER_SIGNATURE_LENGTH,
     KEYCHAIN_SIGNATURE_LENGTH,
     KEYCHAIN_SIGNATURE_TYPE,
+    CallScope,
     KeyAuthorization,
+    KeychainSignature,
     SignatureType,
     SignedKeyAuthorization,
     TokenLimit,
@@ -42,10 +44,13 @@ from .types import (
     Address,
     BytesLike,
     Hash32,
+    Selector,
     as_address,
     as_bytes,
     as_hash32,
     as_optional_address,
+    as_selector,
+    validate_nonempty_address,
 )
 
 __version__ = "0.3.1"
@@ -54,11 +59,14 @@ __all__ = [
     # Types
     "Address",
     "Hash32",
+    "Selector",
     "BytesLike",
     "as_address",
     "as_bytes",
     "as_hash32",
     "as_optional_address",
+    "as_selector",
+    "validate_nonempty_address",
     # Models
     "Call",
     "AccessListItem",
@@ -72,11 +80,13 @@ __all__ = [
     "SignedKeyAuthorization",
     "SignatureType",
     "TokenLimit",
-    "create_key_authorization",
-    # Keychain signing
+    "CallScope",
+    "KeychainSignature",
+    # Keychain signing (deprecated free functions)
     "KEYCHAIN_SIGNATURE_TYPE",
     "KEYCHAIN_SIGNATURE_LENGTH",
     "INNER_SIGNATURE_LENGTH",
     "build_keychain_signature",
+    "create_key_authorization",
     "sign_tx_access_key",
 ]

@@ -212,7 +212,7 @@ data = as_bytes("0xabcdef")  # -> b'\xab\xcd\xef'
 
 ### `TempoTransaction`
 
-Immutable, strongly-typed transaction (frozen dataclass).
+Immutable, strongly-typed transaction (frozen attrs model).
 
 **Factory Methods:**
 
@@ -237,6 +237,7 @@ Immutable, strongly-typed transaction (frozen dataclass).
 **Methods:**
 
 - `sign(private_key, for_fee_payer=False)` - Sign transaction (returns new instance)
+- `sign_access_key(access_key_private_key, root_account)` - Sign with access key (returns new instance)
 - `encode()` - Encode to bytes for transmission
 - `hash()` - Get transaction hash
 - `get_signing_hash(for_fee_payer=False)` - Get hash to sign

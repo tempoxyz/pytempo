@@ -3,13 +3,24 @@
 Returns :class:`~pytempo.Call` objects ready to use in a
 :class:`~pytempo.TempoTransaction`::
 
+    from pytempo import SignatureType
     from pytempo.contracts import AccountKeychain
 
+    # T3+ (default)
     call = AccountKeychain.authorize_key(
         key_id=access_key.address,
-        signature_type=0,
+        signature_type=SignatureType.SECP256K1,
         expiry=2**64 - 1,
     )
+
+    # Pre-T3
+    call = AccountKeychain.authorize_key(
+        key_id=access_key.address,
+        signature_type=SignatureType.SECP256K1,
+        expiry=2**64 - 1,
+        legacy=True,
+    )
+
     tx = TempoTransaction.create(..., calls=(call,))
 """
 
@@ -18,6 +29,7 @@ from typing import Optional
 
 from eth_utils import to_checksum_address
 
+from pytempo.keychain import CallScope, SignatureType
 from pytempo.models import Call
 
 from ._encode import encode_calldata
@@ -39,26 +51,69 @@ class AccountKeychain:
     def authorize_key(
         *,
         key_id: str,
-        signature_type: int,
+        signature_type: SignatureType,
         expiry: int,
         enforce_limits: bool = False,
-        limits: Optional[Sequence[tuple[str, int]]] = None,
+        limits: Optional[Sequence[tuple[str, int] | tuple[str, int, int]]] = None,
+        allow_any_calls: bool = True,
+        allowed_calls: Optional[Sequence[CallScope]] = None,
+        legacy: bool = False,
     ) -> Call:
-        """Build an ``authorizeKey(address,uint8,uint64,bool,(address,uint256)[])`` call.
+        """Build an ``authorizeKey`` call.
+
+        Uses the TIP-1011 ``KeyRestrictions`` struct encoding by default (T3+).
+        Pass ``legacy=True`` for the pre-T3 flat-parameter encoding.
 
         Args:
             key_id: The access key address to authorize.
-            signature_type: 0 = Secp256k1, 1 = P256, 2 = WebAuthn.
+            signature_type: Type of key being authorized (SignatureType.SECP256K1, P256, or WEBAUTHN)
             expiry: Unix timestamp when key expires (use ``2**64 - 1`` for never).
             enforce_limits: Whether to enforce spending limits.
-            limits: List of ``(token_address, amount)`` tuples for spending limits.
+            limits: List of ``(token_address, amount)`` or ``(token_address, amount, period)`` tuples.
+                Period defaults to 0 (one-time limit) if omitted.
+            allow_any_calls: Whether the key can call any contract (default True).
+                Ignored when ``legacy=True``.
+            allowed_calls: List of :class:`~pytempo.CallScope` restricting
+                which contracts/functions the key can call.
+                Only used when ``allow_any_calls`` is False.
+                Ignored when ``legacy=True``.
+            legacy: Use pre-T3 flat-parameter encoding. Pass ``True`` until T3 is activated, then remove this argument.
         """
-        limit_tuples = list(limits) if limits else []
-        data = encode_calldata(
-            _ABI,
-            "authorizeKey",
-            [key_id, signature_type, expiry, enforce_limits, limit_tuples],
-        )
+        if legacy:
+            limit_tuples = (
+                [(t, a) for t, a, *_ in ((*lim, 0)[:3] for lim in limits)]
+                if limits
+                else []
+            )
+            data = encode_calldata(
+                _ABI,
+                "authorizeKey",
+                [key_id, int(signature_type), expiry, enforce_limits, limit_tuples],
+            )
+        else:
+            limit_tuples = (
+                [(t, a, p) for t, a, p in ((*lim, 0)[:3] for lim in limits)]
+                if limits
+                else []
+            )
+            call_tuples = (
+                [(bytes(s.target), [(bytes(s.selector), [])]) for s in allowed_calls]
+                if allowed_calls
+                else []
+            )
+            config = (
+                expiry,
+                enforce_limits,
+                limit_tuples,
+                allow_any_calls,
+                call_tuples,
+            )
+            data = encode_calldata(
+                _ABI,
+                "authorizeKey",
+                [key_id, int(signature_type), config],
+            )
+
         return Call.create(to=ACCOUNT_KEYCHAIN_ADDRESS, data=data)
 
     @staticmethod

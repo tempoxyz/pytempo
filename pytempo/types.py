@@ -9,6 +9,7 @@ from eth_utils import to_bytes
 
 Address = NewType("Address", bytes)
 Hash32 = NewType("Hash32", bytes)
+Selector = NewType("Selector", bytes)
 
 BytesLike = Union[bytes, str]
 
@@ -91,3 +92,26 @@ def as_hash32(value: BytesLike) -> Hash32:
     if len(b) != 32:
         raise ValueError(f"hash32 must be 32 bytes, got {len(b)}")
     return Hash32(b)
+
+
+def as_selector(value: BytesLike) -> Selector:
+    """Convert hex string or bytes to a validated 4-byte function selector.
+
+    Use as: attrs.field(converter=as_selector)
+
+    Raises:
+        TypeError: If value is not a string or bytes-like object (rejects int).
+        ValueError: If selector is not exactly 4 bytes.
+    """
+    b = as_bytes(value)
+    if len(b) != 4:
+        raise ValueError(f"selector must be exactly 4 bytes, got {len(b)}")
+    return Selector(b)
+
+
+def validate_nonempty_address(
+    instance: object, attribute: object, value: Address
+) -> None:
+    """Attrs validator: address must be exactly 20 bytes (not empty)."""
+    if len(bytes(value)) != 20:
+        raise ValueError("address must be exactly 20 bytes")
