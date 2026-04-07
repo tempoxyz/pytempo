@@ -211,17 +211,15 @@ class CallScope:
         *,
         target: BytesLike,
         selector: BytesLike,
-        recipients: list[BytesLike] | None = None,
     ) -> CallScope:
         """Allow calls matching an arbitrary 4-byte function selector.
 
         Args:
             target: Contract address.
             selector: 4-byte function selector.
-            recipients: Optional list of allowed first-argument addresses.
         """
         sel = as_selector(selector)
-        rule = SelectorRule(selector=sel, recipients=recipients or [])
+        rule = SelectorRule(selector=sel)
         return cls(target=target, selector=sel, selector_rules=(rule,))
 
     @classmethod
@@ -235,7 +233,7 @@ class CallScope:
 
         Args:
             target: TIP20 token address.
-            recipients: Optional list of allowed transfer recipients.
+            recipients: Allowed transfer recipients. Empty or None means any recipient.
         """
         addr = _validate_tip20_address(target)
         rule = SelectorRule(selector=_TIP20_TRANSFER, recipients=recipients or [])
@@ -252,7 +250,7 @@ class CallScope:
 
         Args:
             target: TIP20 token address.
-            recipients: Optional list of allowed spender addresses.
+            recipients: Allowed spender addresses. Empty or None means any spender.
         """
         addr = _validate_tip20_address(target)
         rule = SelectorRule(selector=_TIP20_APPROVE, recipients=recipients or [])
@@ -269,7 +267,7 @@ class CallScope:
 
         Args:
             target: TIP20 token address.
-            recipients: Optional list of allowed transfer recipients.
+            recipients: Allowed transfer recipients. Empty or None means any recipient.
         """
         addr = _validate_tip20_address(target)
         rule = SelectorRule(

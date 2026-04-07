@@ -777,13 +777,12 @@ class TestCallScopeConstructors:
         assert len(s.selector_rules) == 1
         assert s.selector_rules[0].recipients == ()
 
-    def test_with_selector_and_recipients(self):
+    def test_with_selector_no_recipients(self):
         target = "0x" + "aa" * 20
         sel = bytes.fromhex("aabbccdd")
-        recipient = "0x" + "bb" * 20
-        s = CallScope.with_selector(target=target, selector=sel, recipients=[recipient])
+        s = CallScope.with_selector(target=target, selector=sel)
         assert len(s.selector_rules) == 1
-        assert len(s.selector_rules[0].recipients) == 1
+        assert s.selector_rules[0].recipients == ()
 
     def test_transfer_with_recipients(self):
         recipient = "0x" + "bb" * 20
