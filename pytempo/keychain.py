@@ -123,6 +123,37 @@ def _validate_tip20_address(target: BytesLike) -> Address:
     return addr
 
 
+def _convert_addresses(
+    value: tuple[Address, ...] | list[BytesLike] | None,
+) -> tuple[Address, ...]:
+    if value is None:
+        return ()
+    return tuple(as_address(v) for v in value)
+
+
+@attrs.define(frozen=True)
+class SelectorRule:
+    """A single function-selector restriction with optional recipient filtering.
+
+    Args:
+        selector: 4-byte function selector.
+        recipients: Allowed first-argument addresses. Empty means any recipient.
+    """
+
+    selector: Selector = attrs.field(converter=as_selector)
+    recipients: tuple[Address, ...] = attrs.field(
+        factory=tuple, converter=_convert_addresses
+    )
+
+
+def _convert_selector_rules(
+    value: tuple[SelectorRule, ...] | list[SelectorRule] | None,
+) -> tuple[SelectorRule, ...]:
+    if value is None:
+        return ()
+    return tuple(value)
+
+
 @attrs.define(frozen=True)
 class CallScope:
     """Call scope restriction for access keys (TIP-1011).
@@ -137,16 +168,37 @@ class CallScope:
     - ``CallScope.approve(target=...)`` — allow ``approve`` on a TIP20 token.
     - ``CallScope.transfer_with_memo(target=...)`` — allow ``transferWithMemo``
       on a TIP20 token.
+    - ``CallScope.with_selector(target=..., selector=...)`` — allow an arbitrary
+      4-byte selector on any contract.
 
     Args:
         target: Contract address the key is allowed to call.
-        selector: 4-byte function selector. Only applicable for TIP20 tokens.
+        selector: 4-byte function selector (kept for backwards compatibility).
+        selector_rules: Full selector rules with optional recipient filtering.
+            When empty, falls back to ``selector`` as a single wildcard-recipient rule.
     """
 
     target: Address = attrs.field(
         converter=as_address, validator=validate_nonempty_address
     )
     selector: Selector = attrs.field(converter=as_selector)
+    selector_rules: tuple[SelectorRule, ...] = attrs.field(
+        factory=tuple, converter=_convert_selector_rules
+    )
+
+    def to_abi_tuple(self) -> tuple:
+        """Convert to ABI-encodable tuple ``(target, [(selector, recipients), ...])``.
+
+        If ``selector_rules`` is empty, falls back to a single rule from ``selector``
+        with no recipient restriction (backwards-compatible behaviour).
+        """
+        rules = self.selector_rules
+        if not rules:
+            rules = (SelectorRule(selector=self.selector),)
+        return (
+            bytes(self.target),
+            [(bytes(r.selector), [bytes(a) for a in r.recipients]) for r in rules],
+        )
 
     @classmethod
     def unrestricted(cls, *, target: BytesLike) -> CallScope:
@@ -154,21 +206,75 @@ class CallScope:
         return cls(target=target, selector=_WILDCARD_SELECTOR)
 
     @classmethod
-    def transfer(cls, *, target: BytesLike) -> CallScope:
-        """Allow ``transfer(address,uint256)`` on a TIP20 token target."""
-        return cls(target=_validate_tip20_address(target), selector=_TIP20_TRANSFER)
+    def with_selector(
+        cls,
+        *,
+        target: BytesLike,
+        selector: BytesLike,
+    ) -> CallScope:
+        """Allow calls matching an arbitrary 4-byte function selector.
+
+        Args:
+            target: Contract address.
+            selector: 4-byte function selector.
+        """
+        sel = as_selector(selector)
+        rule = SelectorRule(selector=sel)
+        return cls(target=target, selector=sel, selector_rules=(rule,))
 
     @classmethod
-    def approve(cls, *, target: BytesLike) -> CallScope:
-        """Allow ``approve(address,uint256)`` on a TIP20 token target."""
-        return cls(target=_validate_tip20_address(target), selector=_TIP20_APPROVE)
+    def transfer(
+        cls,
+        *,
+        target: BytesLike,
+        recipients: list[BytesLike] = (),
+    ) -> CallScope:
+        """Allow ``transfer(address,uint256)`` on a TIP20 token target.
+
+        Args:
+            target: TIP20 token address.
+            recipients: Allowed transfer recipients. Empty means any recipient.
+        """
+        addr = _validate_tip20_address(target)
+        rule = SelectorRule(selector=_TIP20_TRANSFER, recipients=recipients)
+        return cls(target=addr, selector=_TIP20_TRANSFER, selector_rules=(rule,))
 
     @classmethod
-    def transfer_with_memo(cls, *, target: BytesLike) -> CallScope:
-        """Allow ``transferWithMemo(address,uint256,bytes32)`` on a TIP20 token target."""
+    def approve(
+        cls,
+        *,
+        target: BytesLike,
+        recipients: list[BytesLike] = (),
+    ) -> CallScope:
+        """Allow ``approve(address,uint256)`` on a TIP20 token target.
+
+        Args:
+            target: TIP20 token address.
+            recipients: Allowed spender addresses. Empty means any spender.
+        """
+        addr = _validate_tip20_address(target)
+        rule = SelectorRule(selector=_TIP20_APPROVE, recipients=recipients)
+        return cls(target=addr, selector=_TIP20_APPROVE, selector_rules=(rule,))
+
+    @classmethod
+    def transfer_with_memo(
+        cls,
+        *,
+        target: BytesLike,
+        recipients: list[BytesLike] = (),
+    ) -> CallScope:
+        """Allow ``transferWithMemo(address,uint256,bytes32)`` on a TIP20 token target.
+
+        Args:
+            target: TIP20 token address.
+            recipients: Allowed transfer recipients. Empty means any recipient.
+        """
+        addr = _validate_tip20_address(target)
+        rule = SelectorRule(selector=_TIP20_TRANSFER_WITH_MEMO, recipients=recipients)
         return cls(
-            target=_validate_tip20_address(target),
+            target=addr,
             selector=_TIP20_TRANSFER_WITH_MEMO,
+            selector_rules=(rule,),
         )
 
 

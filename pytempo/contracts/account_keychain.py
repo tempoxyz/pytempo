@@ -79,6 +79,15 @@ class AccountKeychain:
                 Ignored when ``legacy=True``.
             legacy: Use pre-T3 flat-parameter encoding. Pass ``True`` until T3 is activated, then remove this argument.
         """
+        if legacy and (allowed_calls or not allow_any_calls):
+            raise ValueError("legacy=True does not support call restrictions")
+
+        if allowed_calls and allow_any_calls:
+            raise ValueError(
+                "allowed_calls was provided but allow_any_calls=True; "
+                "pass allow_any_calls=False to create a scoped key"
+            )
+
         if legacy:
             limit_tuples = (
                 [(t, a) for t, a, *_ in ((*lim, 0)[:3] for lim in limits)]
@@ -97,9 +106,7 @@ class AccountKeychain:
                 else []
             )
             call_tuples = (
-                [(bytes(s.target), [(bytes(s.selector), [])]) for s in allowed_calls]
-                if allowed_calls
-                else []
+                [s.to_abi_tuple() for s in allowed_calls] if allowed_calls else []
             )
             config = (
                 expiry,
@@ -120,6 +127,35 @@ class AccountKeychain:
     def revoke_key(*, key_id: str) -> Call:
         """Build a ``revokeKey(address)`` call."""
         data = encode_calldata(_ABI, "revokeKey", [key_id])
+        return Call.create(to=ACCOUNT_KEYCHAIN_ADDRESS, data=data)
+
+    @staticmethod
+    def set_allowed_calls(
+        *,
+        key_id: str,
+        scopes: Sequence[CallScope],
+    ) -> Call:
+        """Build a ``setAllowedCalls(address,CallScope[])`` call.
+
+        Args:
+            key_id: The access key address.
+            scopes: List of :class:`~pytempo.CallScope` to set as the allowlist.
+        """
+        call_tuples = [s.to_abi_tuple() for s in scopes]
+        data = encode_calldata(_ABI, "setAllowedCalls", [key_id, call_tuples])
+        return Call.create(to=ACCOUNT_KEYCHAIN_ADDRESS, data=data)
+
+    @staticmethod
+    def remove_allowed_calls(*, key_id: str, target: str) -> Call:
+        """Build a ``removeAllowedCalls(address,address)`` call.
+
+        Removes all call-scope rules targeting ``target`` from the key's allowlist.
+
+        Args:
+            key_id: The access key address.
+            target: The contract address to remove from the allowlist.
+        """
+        data = encode_calldata(_ABI, "removeAllowedCalls", [key_id, target])
         return Call.create(to=ACCOUNT_KEYCHAIN_ADDRESS, data=data)
 
     @staticmethod
