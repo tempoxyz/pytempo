@@ -196,3 +196,4 @@ jobs:
         run: uv run pytest -v -s tests/test_integration.py
         env:
           TEMPO_RPC_URL: ${{ secrets.TEMPO_TESTNET_RPC_URL }}
+          TEMPO_HARDFORK: T2

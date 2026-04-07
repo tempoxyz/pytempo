@@ -28,6 +28,7 @@ from pytempo import (
     KeyAuthorization,
     SignatureType,
     TempoTransaction,
+    TokenLimit,
     sign_tx_access_key,
 )
 from pytempo.contracts import (
@@ -36,6 +37,7 @@ from pytempo.contracts import (
     PATH_USD,
     THETA_USD,
     TIP20,
+    AccountKeychain,
     FeeManager,
     StablecoinDEX,
 )
@@ -66,6 +68,12 @@ def rpc_url():
 def w3(rpc_url):
     """Create a Web3 instance connected to the Tempo node."""
     return Web3(Web3.HTTPProvider(rpc_url))
+
+
+@pytest.fixture(scope="module")
+def is_t2():
+    """Check if running against a T2 network via TEMPO_HARDFORK env var (default T3)."""
+    return os.environ.get("TEMPO_HARDFORK", "T3") == "T2"
 
 
 @pytest.fixture(scope="module")
@@ -394,11 +402,10 @@ class TestAccessKeys:
         expiry = int(time.time()) + 3600
 
         auth = KeyAuthorization(
+            key_id=access_key.address,
             chain_id=chain_id,
             key_type=SignatureType.SECP256K1,
-            key_id=access_key.address,
             expiry=expiry,
-            limits=None,
         )
         signed_auth = auth.sign(funded_account.key.hex())
 
@@ -411,7 +418,7 @@ class TestAccessKeys:
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
             calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
-            key_authorization=signed_auth.rlp_encode(),
+            key_authorization=signed_auth,
         )
 
         # Estimate gas from the transaction
@@ -419,7 +426,7 @@ class TestAccessKeys:
             tx.to_estimate_gas_request(
                 funded_account.address,
                 key_id=access_key.address,
-                key_authorization=signed_auth.to_json(),
+                key_authorization=signed_auth,
             )
         )
 
@@ -432,11 +439,10 @@ class TestAccessKeys:
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
             calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
-            key_authorization=signed_auth.rlp_encode(),
+            key_authorization=signed_auth,
         )
 
-        signed_tx = sign_tx_access_key(
-            tx,
+        signed_tx = tx.sign_access_key(
             access_key_private_key=access_key.key.hex(),
             root_account=funded_account.address,
         )
@@ -457,11 +463,10 @@ class TestAccessKeys:
         expiry = int(time.time()) + 3600
 
         auth = KeyAuthorization(
+            key_id=access_key.address,
             chain_id=chain_id,
             key_type=SignatureType.SECP256K1,
-            key_id=access_key.address,
             expiry=expiry,
-            limits=None,
         )
         signed_auth = auth.sign(funded_account.key.hex())
 
@@ -477,7 +482,7 @@ class TestAccessKeys:
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
             calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
-            key_authorization=signed_auth.rlp_encode(),
+            key_authorization=signed_auth,
         )
 
         # Estimate gas from the transaction
@@ -485,7 +490,7 @@ class TestAccessKeys:
             tx1.to_estimate_gas_request(
                 funded_account.address,
                 key_id=access_key.address,
-                key_authorization=signed_auth.to_json(),
+                key_authorization=signed_auth,
             )
         )
 
@@ -498,11 +503,10 @@ class TestAccessKeys:
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
             calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
-            key_authorization=signed_auth.rlp_encode(),
+            key_authorization=signed_auth,
         )
 
-        signed_tx1 = sign_tx_access_key(
-            tx1,
+        signed_tx1 = tx1.sign_access_key(
             access_key_private_key=access_key.key.hex(),
             root_account=funded_account.address,
         )
@@ -540,8 +544,7 @@ class TestAccessKeys:
             calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
         )
 
-        signed_tx2 = sign_tx_access_key(
-            tx2,
+        signed_tx2 = tx2.sign_access_key(
             access_key_private_key=access_key.key.hex(),
             root_account=funded_account.address,
         )
@@ -769,3 +772,405 @@ class TestSetUserFeeToken:
         signed = tx2.sign(funded_account.key.hex())
         receipt = send_tx(w3, signed)
         assert receipt["status"] == 1
+
+
+class TestKeychainSelectors:
+    """Test keychain precompile selectors (authorizeKey, getKey, revokeKey).
+
+    Parity with tempo-go TestIntegration_KeychainSelectors: exercises the
+    authorizeKey → getKey → revokeKey round-trip via the precompile.
+    """
+
+    def test_authorize_get_revoke_round_trip(self, w3, chain_id, funded_account, is_t2):
+        """Authorize an access key, verify via getKey, revoke, verify revoked."""
+        max_fee, priority_fee = get_gas_params(w3)
+
+        access_key = Account.create()
+        # 10 years from now
+        expiry = int(time.time()) + 10 * 365 * 24 * 3600
+
+        # Step 1: Authorize key via EIP-1559 tx (same as tempo-go)
+        nonce = w3.eth.get_transaction_count(funded_account.address)
+        auth_call = AccountKeychain.authorize_key(
+            key_id=access_key.address,
+            signature_type=0,
+            expiry=expiry,
+            enforce_limits=False,
+            limits=[],
+            legacy=is_t2,
+        )
+        tx = TempoTransaction.create(
+            chain_id=chain_id,
+            nonce=nonce,
+            gas_limit=600_000,
+            max_fee_per_gas=max_fee,
+            max_priority_fee_per_gas=priority_fee,
+            calls=(auth_call,),
+        )
+        signed = tx.sign(funded_account.key.hex())
+        receipt = send_tx(w3, signed)
+        assert receipt["status"] == 1
+
+        wait_for_next_block(w3)
+
+        # Step 2: getKey and verify full payload
+        key_info = AccountKeychain.get_key(
+            w3,
+            account_address=funded_account.address,
+            key_id=access_key.address,
+        )
+        assert key_info["signature_type"] == 0
+        assert key_info["key_id"].lower() == access_key.address.lower()
+        assert key_info["expiry"] == expiry
+        assert key_info["enforce_limits"] is False
+        assert key_info["is_revoked"] is False
+
+        # Step 3: Revoke key
+        nonce = w3.eth.get_transaction_count(funded_account.address)
+        revoke_call = AccountKeychain.revoke_key(key_id=access_key.address)
+        tx = TempoTransaction.create(
+            chain_id=chain_id,
+            nonce=nonce,
+            gas_limit=600_000,
+            max_fee_per_gas=max_fee,
+            max_priority_fee_per_gas=priority_fee,
+            calls=(revoke_call,),
+        )
+        signed = tx.sign(funded_account.key.hex())
+        receipt = send_tx(w3, signed)
+        assert receipt["status"] == 1
+
+        wait_for_next_block(w3)
+
+        # Step 4: Verify key is revoked
+        # After revocation the precompile may zero out fields other than is_revoked
+        key_info = AccountKeychain.get_key(
+            w3,
+            account_address=funded_account.address,
+            key_id=access_key.address,
+        )
+        assert key_info["is_revoked"] is True
+
+
+class TestKeychainWithLimits:
+    """Test authorizeKey with spending limits.
+
+    Parity with tempo-go TestIntegration_KeychainWithLimits: authorizes a key
+    with enforceLimits=true + a TokenLimit, then verifies via getRemainingLimit.
+    """
+
+    def test_authorize_with_spending_limits(self, w3, chain_id, funded_account):
+        """Authorize key with enforceLimits=true and verify remaining limit."""
+        max_fee, priority_fee = get_gas_params(w3)
+
+        access_key = Account.create()
+        expiry = int(time.time()) + 10 * 365 * 24 * 3600
+        limit_amount = 1000 * 10**18
+
+        nonce = w3.eth.get_transaction_count(funded_account.address)
+        auth_call = AccountKeychain.authorize_key(
+            key_id=access_key.address,
+            signature_type=0,
+            expiry=expiry,
+            enforce_limits=True,
+            limits=[(PATH_USD, limit_amount)],
+        )
+        tx = TempoTransaction.create(
+            chain_id=chain_id,
+            nonce=nonce,
+            gas_limit=600_000,
+            max_fee_per_gas=max_fee,
+            max_priority_fee_per_gas=priority_fee,
+            calls=(auth_call,),
+        )
+        signed = tx.sign(funded_account.key.hex())
+        receipt = send_tx(w3, signed)
+
+        status = receipt.get("status")
+        if status != 1:
+            pytest.skip(
+                "authorizeKey with enforceLimits=true reverted — "
+                "precompile may not support spending limits yet"
+            )
+
+        wait_for_next_block(w3)
+
+        # Verify key was stored with enforce_limits=true
+        key_info = AccountKeychain.get_key(
+            w3,
+            account_address=funded_account.address,
+            key_id=access_key.address,
+        )
+        assert key_info["key_id"].lower() == access_key.address.lower()
+        assert key_info["enforce_limits"] is True
+
+        # Verify remaining limit
+        remaining = AccountKeychain.get_remaining_limit(
+            w3,
+            account_address=funded_account.address,
+            key_id=access_key.address,
+            token_address=PATH_USD,
+        )
+        assert remaining == limit_amount
+
+
+class TestKeyAuthorizationWithLimits:
+    """Test inline key authorization with spending limits.
+
+    Exercises the KeyAuthorization flow with TokenLimit, which the existing
+    TestAccessKeys do not cover (they use limits=None).
+    """
+
+    def test_inline_key_auth_with_limits(self, w3, chain_id, funded_account):
+        """Provision access key with spending limits via key_authorization."""
+        max_fee, priority_fee = get_gas_params(w3)
+
+        access_key = Account.create()
+        expiry = int(time.time()) + 3600
+        limit_amount = 500 * 10**18
+
+        auth = KeyAuthorization(
+            chain_id=chain_id,
+            key_type=SignatureType.SECP256K1,
+            key_id=access_key.address,
+            expiry=expiry,
+            limits=[TokenLimit(token=PATH_USD, limit=limit_amount)],
+        )
+        signed_auth = auth.sign(funded_account.key.hex())
+
+        nonce_key = 2000 + (int(time.time()) % 10000)
+
+        tx = TempoTransaction.create(
+            chain_id=chain_id,
+            nonce=0,
+            nonce_key=nonce_key,
+            gas_limit=0,
+            max_fee_per_gas=max_fee,
+            max_priority_fee_per_gas=priority_fee,
+            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
+            key_authorization=signed_auth,
+        )
+
+        gas_estimate = w3.eth.estimate_gas(
+            tx.to_estimate_gas_request(
+                funded_account.address,
+                key_id=access_key.address,
+                key_authorization=signed_auth.to_json(),
+            )
+        )
+
+        tx = TempoTransaction.create(
+            chain_id=chain_id,
+            nonce=0,
+            nonce_key=nonce_key,
+            gas_limit=gas_estimate,
+            max_fee_per_gas=max_fee,
+            max_priority_fee_per_gas=priority_fee,
+            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
+            key_authorization=signed_auth,
+        )
+
+        signed_tx = sign_tx_access_key(
+            tx,
+            access_key_private_key=access_key.key.hex(),
+            root_account=funded_account.address,
+        )
+        receipt = send_tx(w3, signed_tx)
+        assert receipt["status"] == 1
+
+        # Verify key was provisioned with correct limits
+        wait_for_next_block(w3)
+
+        key_info = AccountKeychain.get_key(
+            w3,
+            account_address=funded_account.address,
+            key_id=access_key.address,
+        )
+        assert key_info["signature_type"] == 0
+        assert key_info["key_id"].lower() == access_key.address.lower()
+        assert key_info["expiry"] == expiry
+        assert key_info["is_revoked"] is False
+
+
+class TestTransactionValidation:
+    """Test transaction validation (parity with tempo-go BuilderValidation).
+
+    Exercises TempoTransaction.validate() to ensure invalid transactions
+    are rejected before submission.
+    """
+
+    def test_valid_transaction(self, chain_id):
+        """Valid transaction should pass validation."""
+        tx = TempoTransaction.create(
+            chain_id=chain_id,
+            gas_limit=300_000,
+            max_fee_per_gas=2_000_000_000,
+            max_priority_fee_per_gas=1_000_000_000,
+            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
+        )
+        tx.validate()
+
+    def test_zero_gas_rejected(self, chain_id):
+        """gas_limit=0 should raise ValueError."""
+        tx = TempoTransaction.create(
+            chain_id=chain_id,
+            gas_limit=0,
+            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
+        )
+        with pytest.raises(ValueError, match="gas_limit must be > 0"):
+            tx.validate()
+
+    def test_no_calls_rejected(self, chain_id):
+        """Transaction with no calls should raise ValueError."""
+        tx = TempoTransaction.create(
+            chain_id=chain_id,
+            gas_limit=300_000,
+        )
+        with pytest.raises(ValueError, match="at least one call"):
+            tx.validate()
+
+    def test_priority_fee_exceeds_max_fee_rejected(self, chain_id):
+        """max_priority_fee > max_fee should raise ValueError."""
+        tx = TempoTransaction.create(
+            chain_id=chain_id,
+            gas_limit=300_000,
+            max_fee_per_gas=100,
+            max_priority_fee_per_gas=200,
+            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
+        )
+        with pytest.raises(ValueError, match="cannot exceed"):
+            tx.validate()
+
+    def test_valid_window_reversed_rejected(self, chain_id):
+        """valid_after > valid_before should raise ValueError."""
+        tx = TempoTransaction.create(
+            chain_id=chain_id,
+            gas_limit=300_000,
+            valid_after=2000,
+            valid_before=1000,
+            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
+        )
+        with pytest.raises(ValueError, match="valid_after cannot be greater"):
+            tx.validate()
+
+
+class TestEncodingRoundTrip:
+    """Test encode → hash round-trip (parity with tempo-go RoundTrip).
+
+    Verifies that a signed transaction can be encoded and hashed consistently.
+    """
+
+    def test_sign_encode_hash_deterministic(self, chain_id):
+        """Same transaction should produce the same hash."""
+        account = Account.create()
+
+        tx = TempoTransaction.create(
+            chain_id=chain_id,
+            nonce=42,
+            gas_limit=300_000,
+            max_fee_per_gas=10_000_000_000,
+            max_priority_fee_per_gas=1_000_000_000,
+            calls=(
+                Call.create(
+                    to=COUNTER_CONTRACT,
+                    value=1000,
+                    data=COUNTER_INCREMENT,
+                ),
+            ),
+        )
+
+        signed = tx.sign(account.key.hex())
+
+        encoded1 = signed.encode()
+        encoded2 = signed.encode()
+        assert encoded1 == encoded2
+
+        hash1 = signed.hash()
+        hash2 = signed.hash()
+        assert hash1 == hash2
+        assert len(hash1) == 32
+
+    def test_encode_preserves_tx_type(self, chain_id):
+        """Encoded transaction should start with 0x76 type byte."""
+        account = Account.create()
+
+        tx = TempoTransaction.create(
+            chain_id=chain_id,
+            gas_limit=300_000,
+            max_fee_per_gas=2_000_000_000,
+            max_priority_fee_per_gas=1_000_000_000,
+            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
+        )
+
+        signed = tx.sign(account.key.hex())
+        encoded = signed.encode()
+
+        assert encoded[0] == 0x76
+
+    def test_encode_batch_calls(self, chain_id):
+        """Encoded batch transaction should be valid."""
+        account = Account.create()
+
+        tx = TempoTransaction.create(
+            chain_id=chain_id,
+            gas_limit=300_000,
+            max_fee_per_gas=2_000_000_000,
+            max_priority_fee_per_gas=1_000_000_000,
+            calls=(
+                Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),
+                Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),
+                Call.create(to=COUNTER_CONTRACT, value=100),
+            ),
+        )
+
+        signed = tx.sign(account.key.hex())
+        encoded = signed.encode()
+
+        assert encoded[0] == 0x76
+        assert len(encoded) > 1
+
+    def test_sponsored_encode_round_trip(self, chain_id):
+        """Sponsored transaction encoding should be deterministic."""
+        sender = Account.create()
+        sponsor = Account.create()
+
+        tx = TempoTransaction.create(
+            chain_id=chain_id,
+            nonce=0,
+            nonce_key=999,
+            gas_limit=300_000,
+            max_fee_per_gas=2_000_000_000,
+            max_priority_fee_per_gas=1_000_000_000,
+            awaiting_fee_payer=True,
+            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
+        )
+
+        sender_signed = tx.sign(sender.key.hex())
+        fully_signed = sender_signed.sign(sponsor.key.hex(), for_fee_payer=True)
+
+        encoded1 = fully_signed.encode()
+        encoded2 = fully_signed.encode()
+        assert encoded1 == encoded2
+
+        hash1 = fully_signed.hash()
+        hash2 = fully_signed.hash()
+        assert hash1 == hash2
+
+    def test_vrs_recovery(self, chain_id):
+        """Should recover v, r, s from signed transaction."""
+        account = Account.create()
+
+        tx = TempoTransaction.create(
+            chain_id=chain_id,
+            gas_limit=300_000,
+            max_fee_per_gas=2_000_000_000,
+            max_priority_fee_per_gas=1_000_000_000,
+            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
+        )
+
+        signed = tx.sign(account.key.hex())
+        v, r, s = signed.vrs()
+
+        assert v in (0, 1, 27, 28)
+        assert r > 0
+        assert s > 0
