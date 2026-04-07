@@ -6,7 +6,7 @@ import pytest
 from eth_account import Account
 from eth_utils import to_bytes
 
-from pytempo import Call, CallScope, TempoTransaction
+from pytempo import Call, CallScope, SelectorRule, TempoTransaction
 from pytempo.contracts import ALPHA_USD
 from pytempo.contracts.account_keychain import AccountKeychain
 from pytempo.contracts.addresses import ACCOUNT_KEYCHAIN_ADDRESS
@@ -768,6 +768,134 @@ class TestCallScopeConstructors:
         s = CallScope.transfer(target=ALPHA_USD)
         with pytest.raises(AttributeError):
             s.selector = b"\x00" * 4  # type: ignore[misc]
+
+    def test_with_selector(self):
+        target = "0x" + "aa" * 20
+        sel = bytes.fromhex("aabbccdd")
+        s = CallScope.with_selector(target=target, selector=sel)
+        assert bytes(s.selector) == sel
+        assert len(s.selector_rules) == 1
+        assert s.selector_rules[0].recipients == ()
+
+    def test_with_selector_and_recipients(self):
+        target = "0x" + "aa" * 20
+        sel = bytes.fromhex("aabbccdd")
+        recipient = "0x" + "bb" * 20
+        s = CallScope.with_selector(target=target, selector=sel, recipients=[recipient])
+        assert len(s.selector_rules) == 1
+        assert len(s.selector_rules[0].recipients) == 1
+
+    def test_transfer_with_recipients(self):
+        recipient = "0x" + "bb" * 20
+        s = CallScope.transfer(target=ALPHA_USD, recipients=[recipient])
+        assert len(s.selector_rules) == 1
+        assert len(s.selector_rules[0].recipients) == 1
+
+    def test_to_abi_tuple_fallback(self):
+        """CallScope without selector_rules falls back to selector field."""
+        s = CallScope(target="0x" + "aa" * 20, selector=bytes.fromhex("aabbccdd"))
+        target_bytes, rules = s.to_abi_tuple()
+        assert len(rules) == 1
+        assert rules[0][0] == bytes.fromhex("aabbccdd")
+        assert rules[0][1] == []
+
+    def test_to_abi_tuple_with_rules(self):
+        """CallScope with selector_rules uses them directly."""
+        recipient = "0x" + "bb" * 20
+        s = CallScope.transfer(target=ALPHA_USD, recipients=[recipient])
+        target_bytes, rules = s.to_abi_tuple()
+        assert len(rules) == 1
+        assert rules[0][0] == bytes.fromhex("a9059cbb")
+        assert len(rules[0][1]) == 1
+
+
+class TestSelectorRule:
+    """Tests for SelectorRule."""
+
+    def test_empty_recipients(self):
+        r = SelectorRule(selector=bytes.fromhex("aabbccdd"))
+        assert r.recipients == ()
+
+    def test_with_recipients(self):
+        addr = "0x" + "aa" * 20
+        r = SelectorRule(selector=bytes.fromhex("aabbccdd"), recipients=[addr])
+        assert len(r.recipients) == 1
+
+    def test_frozen(self):
+        r = SelectorRule(selector=bytes.fromhex("aabbccdd"))
+        with pytest.raises(AttributeError):
+            r.selector = b"\x00" * 4  # type: ignore[misc]
+
+
+class TestSetAndRemoveAllowedCalls:
+    """Tests for AccountKeychain.set_allowed_calls and remove_allowed_calls."""
+
+    def test_set_allowed_calls_encodes(self):
+        key_id = "0x" + "11" * 20
+        scope = CallScope.transfer(target=ALPHA_USD)
+        call = AccountKeychain.set_allowed_calls(key_id=key_id, scopes=[scope])
+        assert call.to is not None
+        assert call.data is not None
+
+    def test_remove_allowed_calls_encodes(self):
+        key_id = "0x" + "11" * 20
+        target = "0x" + "22" * 20
+        call = AccountKeychain.remove_allowed_calls(key_id=key_id, target=target)
+        assert call.to is not None
+        assert call.data is not None
+
+    def test_set_allowed_calls_with_recipients(self):
+        key_id = "0x" + "11" * 20
+        recipient = "0x" + "33" * 20
+        scope = CallScope.transfer(target=ALPHA_USD, recipients=[recipient])
+        call = AccountKeychain.set_allowed_calls(key_id=key_id, scopes=[scope])
+        assert call.data is not None
+
+    def test_set_allowed_calls_with_selector(self):
+        key_id = "0x" + "11" * 20
+        scope = CallScope.with_selector(
+            target="0x" + "22" * 20,
+            selector=bytes.fromhex("aabbccdd"),
+        )
+        call = AccountKeychain.set_allowed_calls(key_id=key_id, scopes=[scope])
+        assert call.data is not None
+
+
+class TestAuthorizeKeyGuards:
+    """Tests for authorize_key argument validation."""
+
+    def test_rejects_allowed_calls_with_allow_any_calls_true(self):
+        scope = CallScope.transfer(target=ALPHA_USD)
+        with pytest.raises(ValueError, match="allow_any_calls"):
+            AccountKeychain.authorize_key(
+                key_id="0x" + "11" * 20,
+                signature_type=SignatureType.SECP256K1,
+                expiry=2**64 - 1,
+                allowed_calls=[scope],
+            )
+
+    def test_rejects_legacy_with_call_restrictions(self):
+        scope = CallScope.transfer(target=ALPHA_USD)
+        with pytest.raises(ValueError, match="legacy"):
+            AccountKeychain.authorize_key(
+                key_id="0x" + "11" * 20,
+                signature_type=SignatureType.SECP256K1,
+                expiry=2**64 - 1,
+                allowed_calls=[scope],
+                allow_any_calls=False,
+                legacy=True,
+            )
+
+    def test_accepts_allowed_calls_with_allow_any_calls_false(self):
+        scope = CallScope.transfer(target=ALPHA_USD)
+        call = AccountKeychain.authorize_key(
+            key_id="0x" + "11" * 20,
+            signature_type=SignatureType.SECP256K1,
+            expiry=2**64 - 1,
+            allowed_calls=[scope],
+            allow_any_calls=False,
+        )
+        assert call.data is not None
 
 
 class TestRecoverSigner:

@@ -27,6 +27,7 @@ from .keychain import (
     CallScope,
     KeyAuthorization,
     KeychainSignature,
+    SelectorRule,
     SignatureType,
     SignedKeyAuthorization,
     TokenLimit,
@@ -81,6 +82,7 @@ __all__ = [
     "SignatureType",
     "TokenLimit",
     "CallScope",
+    "SelectorRule",
     "KeychainSignature",
     # Keychain signing (deprecated free functions)
     "KEYCHAIN_SIGNATURE_TYPE",
