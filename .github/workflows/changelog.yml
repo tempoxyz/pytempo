@@ -15,7 +15,6 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ github.head_ref }}
-          persist-credentials: false
       - name: Install changelogs
         run: curl -sSL https://changelogs.sh | sh
       - name: Install Claude CLI
