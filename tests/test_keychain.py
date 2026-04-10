@@ -6,7 +6,7 @@ import pytest
 from eth_account import Account
 from eth_utils import to_bytes
 
-from pytempo import Call, CallScope, SelectorRule, TempoTransaction
+from pytempo import Call, CallScope, KeyRestrictions, SelectorRule, TempoTransaction
 from pytempo.contracts import ALPHA_USD
 from pytempo.contracts.account_keychain import AccountKeychain
 from pytempo.contracts.addresses import ACCOUNT_KEYCHAIN_ADDRESS
@@ -511,6 +511,22 @@ class TestTokenLimit:
         with pytest.raises(AttributeError):
             limit.limit = 2000  # type: ignore[misc]
 
+    def test_period_defaults_to_zero(self):
+        limit = TokenLimit(token="0x" + "a" * 40, limit=1000)
+        assert limit.period == 0
+
+    def test_accepts_valid_period(self):
+        limit = TokenLimit(token="0x" + "a" * 40, limit=1000, period=3600)
+        assert limit.period == 3600
+
+    def test_rejects_negative_period(self):
+        with pytest.raises(ValueError):
+            TokenLimit(token="0x" + "a" * 40, limit=1000, period=-1)
+
+    def test_rejects_period_exceeding_u64(self):
+        with pytest.raises(ValueError):
+            TokenLimit(token="0x" + "a" * 40, limit=1000, period=2**64)
+
 
 class TestKeyAuthorization:
     """Tests for KeyAuthorization attrs model."""
@@ -860,39 +876,86 @@ class TestSetAndRemoveAllowedCalls:
         assert call.data is not None
 
 
-class TestAuthorizeKeyGuards:
-    """Tests for authorize_key argument validation."""
+class TestAuthorizeKeyWithRestrictions:
+    """Tests for authorize_key with KeyRestrictions."""
 
-    def test_rejects_allowed_calls_with_allow_any_calls_true(self):
-        scope = CallScope.transfer(target=ALPHA_USD)
-        with pytest.raises(ValueError, match="allow_any_calls"):
-            AccountKeychain.authorize_key(
-                key_id="0x" + "11" * 20,
-                signature_type=SignatureType.SECP256K1,
-                expiry=2**64 - 1,
-                allowed_calls=[scope],
-            )
-
-    def test_rejects_legacy_with_call_restrictions(self):
-        scope = CallScope.transfer(target=ALPHA_USD)
-        with pytest.raises(ValueError, match="legacy"):
-            AccountKeychain.authorize_key(
-                key_id="0x" + "11" * 20,
-                signature_type=SignatureType.SECP256K1,
-                expiry=2**64 - 1,
-                allowed_calls=[scope],
-                allow_any_calls=False,
-                legacy=True,
-            )
-
-    def test_accepts_allowed_calls_with_allow_any_calls_false(self):
-        scope = CallScope.transfer(target=ALPHA_USD)
+    def test_basic_restrictions(self):
+        r = KeyRestrictions(expiry=2**64 - 1)
         call = AccountKeychain.authorize_key(
             key_id="0x" + "11" * 20,
             signature_type=SignatureType.SECP256K1,
+            restrictions=r,
+        )
+        assert call.data is not None
+
+    def test_restrictions_with_call_scopes(self):
+        scope = CallScope.transfer(target=ALPHA_USD)
+        r = KeyRestrictions(
             expiry=2**64 - 1,
             allowed_calls=[scope],
-            allow_any_calls=False,
+        )
+        call = AccountKeychain.authorize_key(
+            key_id="0x" + "11" * 20,
+            signature_type=SignatureType.SECP256K1,
+            restrictions=r,
+        )
+        assert call.data is not None
+
+    def test_restrictions_with_limits(self):
+        r = KeyRestrictions(
+            expiry=1893456000,
+            limits=[TokenLimit(token="0x" + "cc" * 20, limit=1000)],
+        )
+        call = AccountKeychain.authorize_key(
+            key_id="0x" + "11" * 20,
+            signature_type=SignatureType.SECP256K1,
+            restrictions=r,
+        )
+        assert call.data is not None
+
+    def test_legacy_rejects_call_scopes(self):
+        scope = CallScope.transfer(target=ALPHA_USD)
+        r = KeyRestrictions(allowed_calls=[scope])
+        with pytest.raises(ValueError, match="call restrictions"):
+            AccountKeychain.authorize_key(
+                key_id="0x" + "11" * 20,
+                signature_type=SignatureType.SECP256K1,
+                restrictions=r,
+                legacy=True,
+            )
+
+    def test_default_restrictions_produces_valid_call(self):
+        call = AccountKeychain.authorize_key(
+            key_id="0x" + "11" * 20,
+            signature_type=SignatureType.SECP256K1,
+            restrictions=KeyRestrictions(),
+        )
+        assert call.data is not None
+
+    def test_no_calls_restrictions(self):
+        r = KeyRestrictions.no_calls()
+        call = AccountKeychain.authorize_key(
+            key_id="0x" + "11" * 20,
+            signature_type=SignatureType.SECP256K1,
+            restrictions=r,
+        )
+        assert call.data is not None
+
+    def test_no_spending_restrictions(self):
+        r = KeyRestrictions.no_spending()
+        call = AccountKeychain.authorize_key(
+            key_id="0x" + "11" * 20,
+            signature_type=SignatureType.SECP256K1,
+            restrictions=r,
+        )
+        assert call.data is not None
+
+    def test_authorize_key_legacy_convenience(self):
+        r = KeyRestrictions(expiry=999)
+        call = AccountKeychain.authorize_key_legacy(
+            key_id="0x" + "11" * 20,
+            signature_type=SignatureType.SECP256K1,
+            restrictions=r,
         )
         assert call.data is not None
 
@@ -943,3 +1006,151 @@ class TestCreateKeyAuthorizationCompat:
             limits=(TokenLimit(token="0x" + "c" * 40, limit=1000),),
         )
         assert via_wrapper.rlp_encode() == via_direct.rlp_encode()
+
+
+# ---------------------------------------------------------------------------
+# KeyRestrictions introspection
+# ---------------------------------------------------------------------------
+
+_TRANSFER_SELECTOR = bytes.fromhex("a9059cbb")
+
+
+class TestKeyRestrictionsIsUnrestricted:
+    """Tests for KeyRestrictions.is_unrestricted."""
+
+    def test_default_is_unrestricted(self):
+        r = KeyRestrictions()
+        assert r.is_unrestricted()
+
+    def test_with_scopes_is_not_unrestricted(self):
+        scope = CallScope.unrestricted(target="0x" + "aa" * 20)
+        r = KeyRestrictions(allowed_calls=[scope])
+        assert not r.is_unrestricted()
+
+    def test_empty_scopes_is_not_unrestricted(self):
+        r = KeyRestrictions(allowed_calls=[])
+        assert not r.is_unrestricted()
+
+
+class TestKeyRestrictionsIsCallAllowed:
+    """Tests mirroring tempo_alloy::KeyRestrictions::is_call_allowed."""
+
+    def test_unrestricted_allows_everything(self):
+        r = KeyRestrictions()
+        target = "0x" + "22" * 20
+        assert r.is_call_allowed(target)
+        assert r.is_call_allowed(target, b"\xaa\xbb\xcc\xdd")
+
+    def test_empty_scopes_denies_all(self):
+        r = KeyRestrictions(allowed_calls=[])
+        target = "0x" + "22" * 20
+        assert not r.is_call_allowed(target, b"\xaa\xbb\xcc\xdd")
+
+    def test_target_not_in_scope(self):
+        token = ALPHA_USD
+        other = "0x" + "33" * 20
+        r = KeyRestrictions(
+            allowed_calls=[CallScope.unrestricted(target=token)],
+        )
+        assert not r.is_call_allowed(other, b"\xaa\xbb\xcc\xdd")
+
+    def test_no_selector_rules_allows_any_call(self):
+        target = "0x" + "aa" * 20
+        r = KeyRestrictions(
+            allowed_calls=[CallScope.unrestricted(target=target)],
+        )
+        assert r.is_call_allowed(target, b"\xaa\xbb\xcc\xdd")
+        assert r.is_call_allowed(target)
+
+    def test_selector_match(self):
+        target = "0x" + "aa" * 20
+        sel = bytes.fromhex("aabbccdd")
+        r = KeyRestrictions(
+            allowed_calls=[CallScope.with_selector(target=target, selector=sel)],
+        )
+        assert r.is_call_allowed(target, b"\xaa\xbb\xcc\xdd")
+        assert not r.is_call_allowed(target, b"\x11\x22\x33\x44")
+        assert not r.is_call_allowed(target, b"\xaa\xbb")
+
+    def test_transfer_with_recipients(self):
+        token = ALPHA_USD
+        allowed = "0x" + "44" * 20
+
+        r = KeyRestrictions(
+            allowed_calls=[CallScope.transfer(target=token, recipients=[allowed])],
+        )
+
+        # Valid transfer calldata with allowed recipient
+        input_ok = bytearray()
+        input_ok.extend(_TRANSFER_SELECTOR)
+        input_ok.extend(b"\x00" * 12)
+        input_ok.extend(bytes.fromhex("44" * 20))
+        input_ok.extend(b"\x00" * 32)
+        assert r.is_call_allowed(token, bytes(input_ok))
+
+        # Same selector but denied recipient
+        input_bad = bytearray()
+        input_bad.extend(_TRANSFER_SELECTOR)
+        input_bad.extend(b"\x00" * 12)
+        input_bad.extend(bytes.fromhex("55" * 20))
+        input_bad.extend(b"\x00" * 32)
+        assert not r.is_call_allowed(token, bytes(input_bad))
+
+    def test_recipient_word_too_short(self):
+        token = ALPHA_USD
+        allowed = "0x" + "44" * 20
+        r = KeyRestrictions(
+            allowed_calls=[CallScope.transfer(target=token, recipients=[allowed])],
+        )
+        # Selector only, no recipient word
+        assert not r.is_call_allowed(token, _TRANSFER_SELECTOR)
+
+    def test_no_recipients_allows_any(self):
+        token = ALPHA_USD
+        r = KeyRestrictions(
+            allowed_calls=[CallScope.transfer(target=token, recipients=[])],
+        )
+
+        input_data = bytearray()
+        input_data.extend(_TRANSFER_SELECTOR)
+        input_data.extend(b"\x00" * 12)
+        input_data.extend(bytes.fromhex("99" * 20))
+        input_data.extend(b"\x00" * 32)
+        assert r.is_call_allowed(token, bytes(input_data))
+
+    def test_frozen(self):
+        r = KeyRestrictions()
+        with pytest.raises(AttributeError):
+            r.allowed_calls = []  # type: ignore[misc]
+
+    def test_rejects_negative_expiry(self):
+        with pytest.raises(ValueError):
+            KeyRestrictions(expiry=-1)
+
+    def test_rejects_expiry_exceeding_u64(self):
+        with pytest.raises(ValueError):
+            KeyRestrictions(expiry=2**64)
+
+    def test_accepts_max_u64_expiry(self):
+        r = KeyRestrictions(expiry=2**64 - 1)
+        assert r.expiry == 2**64 - 1
+
+
+class TestKeyAuthorizationPeriodicLimits:
+    """KeyAuthorization rejects periodic limits (inline auth doesn't support them)."""
+
+    def test_rejects_periodic_limit(self):
+        with pytest.raises(ValueError, match="periodic limits"):
+            KeyAuthorization(
+                key_id="0x" + "bb" * 20,
+                chain_id=42429,
+                limits=[TokenLimit(token="0x" + "cc" * 20, limit=1000, period=3600)],
+            )
+
+    def test_accepts_zero_period_limit(self):
+        auth = KeyAuthorization(
+            key_id="0x" + "bb" * 20,
+            chain_id=42429,
+            limits=[TokenLimit(token="0x" + "cc" * 20, limit=1000, period=0)],
+        )
+        assert auth.limits is not None

@@ -26,6 +26,7 @@ from web3 import Web3
 from pytempo import (
     Call,
     KeyAuthorization,
+    KeyRestrictions,
     SignatureType,
     TempoTransaction,
     TokenLimit,
@@ -793,10 +794,8 @@ class TestKeychainSelectors:
         nonce = w3.eth.get_transaction_count(funded_account.address)
         auth_call = AccountKeychain.authorize_key(
             key_id=access_key.address,
-            signature_type=0,
-            expiry=expiry,
-            enforce_limits=False,
-            limits=[],
+            signature_type=SignatureType.SECP256K1,
+            restrictions=KeyRestrictions(expiry=expiry),
             legacy=is_t2,
         )
         tx = TempoTransaction.create(
@@ -870,10 +869,11 @@ class TestKeychainWithLimits:
         nonce = w3.eth.get_transaction_count(funded_account.address)
         auth_call = AccountKeychain.authorize_key(
             key_id=access_key.address,
-            signature_type=0,
-            expiry=expiry,
-            enforce_limits=True,
-            limits=[(PATH_USD, limit_amount)],
+            signature_type=SignatureType.SECP256K1,
+            restrictions=KeyRestrictions(
+                expiry=expiry,
+                limits=[TokenLimit(token=PATH_USD, limit=limit_amount)],
+            ),
         )
         tx = TempoTransaction.create(
             chain_id=chain_id,

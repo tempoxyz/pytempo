@@ -27,6 +27,7 @@ from .keychain import (
     CallScope,
     KeyAuthorization,
     KeychainSignature,
+    KeyRestrictions,
     SelectorRule,
     SignatureType,
     SignedKeyAuthorization,
@@ -78,6 +79,7 @@ __all__ = [
     "ACCOUNT_KEYCHAIN_ADDRESS",
     # Key authorization (inline access key provisioning)
     "KeyAuthorization",
+    "KeyRestrictions",
     "SignedKeyAuthorization",
     "SignatureType",
     "TokenLimit",

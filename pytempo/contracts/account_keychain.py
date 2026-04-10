@@ -3,33 +3,25 @@
 Returns :class:`~pytempo.Call` objects ready to use in a
 :class:`~pytempo.TempoTransaction`::
 
-    from pytempo import SignatureType
+    from pytempo import KeyRestrictions, SignatureType
     from pytempo.contracts import AccountKeychain
 
-    # T3+ (default)
     call = AccountKeychain.authorize_key(
         key_id=access_key.address,
         signature_type=SignatureType.SECP256K1,
-        expiry=2**64 - 1,
-    )
-
-    # Pre-T3
-    call = AccountKeychain.authorize_key(
-        key_id=access_key.address,
-        signature_type=SignatureType.SECP256K1,
-        expiry=2**64 - 1,
-        legacy=True,
+        restrictions=KeyRestrictions(expiry=2**64 - 1),
     )
 
     tx = TempoTransaction.create(..., calls=(call,))
 """
 
+from __future__ import annotations
+
 from collections.abc import Sequence
-from typing import Optional
 
 from eth_utils import to_checksum_address
 
-from pytempo.keychain import CallScope, SignatureType
+from pytempo.keychain import CallScope, KeyRestrictions, SignatureType
 from pytempo.models import Call
 
 from ._encode import encode_calldata
@@ -52,76 +44,71 @@ class AccountKeychain:
         *,
         key_id: str,
         signature_type: SignatureType,
-        expiry: int,
-        enforce_limits: bool = False,
-        limits: Optional[Sequence[tuple[str, int] | tuple[str, int, int]]] = None,
-        allow_any_calls: bool = True,
-        allowed_calls: Optional[Sequence[CallScope]] = None,
+        restrictions: KeyRestrictions,
         legacy: bool = False,
     ) -> Call:
         """Build an ``authorizeKey`` call.
 
-        Uses the TIP-1011 ``KeyRestrictions`` struct encoding by default (T3+).
-        Pass ``legacy=True`` for the pre-T3 flat-parameter encoding.
-
         Args:
             key_id: The access key address to authorize.
-            signature_type: Type of key being authorized (SignatureType.SECP256K1, P256, or WEBAUTHN)
-            expiry: Unix timestamp when key expires (use ``2**64 - 1`` for never).
-            enforce_limits: Whether to enforce spending limits.
-            limits: List of ``(token_address, amount)`` or ``(token_address, amount, period)`` tuples.
-                Period defaults to 0 (one-time limit) if omitted.
-            allow_any_calls: Whether the key can call any contract (default True).
-                Ignored when ``legacy=True``.
-            allowed_calls: List of :class:`~pytempo.CallScope` restricting
-                which contracts/functions the key can call.
-                Only used when ``allow_any_calls`` is False.
-                Ignored when ``legacy=True``.
-            legacy: Use pre-T3 flat-parameter encoding. Pass ``True`` until T3 is activated, then remove this argument.
+            signature_type: Type of key being authorized.
+            restrictions: Key restrictions (expiry, limits, call scopes).
+            legacy: Use pre-T3 flat-parameter encoding. Pass ``True``
+                until T3 is activated, then remove this argument.
         """
-        if legacy and (allowed_calls or not allow_any_calls):
-            raise ValueError("legacy=True does not support call restrictions")
-
-        if allowed_calls and allow_any_calls:
-            raise ValueError(
-                "allowed_calls was provided but allow_any_calls=True; "
-                "pass allow_any_calls=False to create a scoped key"
-            )
-
         if legacy:
+            if restrictions.allowed_calls is not None:
+                raise ValueError("legacy=True does not support call restrictions")
+            if restrictions.limits and any(
+                lim.period != 0 for lim in restrictions.limits
+            ):
+                raise ValueError("legacy=True does not support periodic limits")
+
             limit_tuples = (
-                [(t, a) for t, a, *_ in ((*lim, 0)[:3] for lim in limits)]
-                if limits
+                [(bytes(lim.token).hex(), lim.limit) for lim in restrictions.limits]
+                if restrictions.limits
                 else []
             )
             data = encode_calldata(
                 _ABI,
                 "authorizeKey",
-                [key_id, int(signature_type), expiry, enforce_limits, limit_tuples],
+                [
+                    key_id,
+                    int(signature_type),
+                    restrictions.expiry
+                    if restrictions.expiry is not None
+                    else 2**64 - 1,
+                    restrictions.limits is not None,
+                    limit_tuples,
+                ],
             )
         else:
-            limit_tuples = (
-                [(t, a, p) for t, a, p in ((*lim, 0)[:3] for lim in limits)]
-                if limits
-                else []
-            )
-            call_tuples = (
-                [s.to_abi_tuple() for s in allowed_calls] if allowed_calls else []
-            )
-            config = (
-                expiry,
-                enforce_limits,
-                limit_tuples,
-                allow_any_calls,
-                call_tuples,
-            )
             data = encode_calldata(
                 _ABI,
                 "authorizeKey",
-                [key_id, int(signature_type), config],
+                [key_id, int(signature_type), restrictions.to_abi_tuple()],
             )
 
         return Call.create(to=ACCOUNT_KEYCHAIN_ADDRESS, data=data)
+
+    @staticmethod
+    def authorize_key_legacy(
+        *,
+        key_id: str,
+        signature_type: SignatureType,
+        restrictions: KeyRestrictions,
+    ) -> Call:
+        """Build a pre-T3 ``authorizeKey`` call.
+
+        Convenience wrapper equivalent to
+        ``authorize_key(..., legacy=True)``.
+        """
+        return AccountKeychain.authorize_key(
+            key_id=key_id,
+            signature_type=signature_type,
+            restrictions=restrictions,
+            legacy=True,
+        )
 
     @staticmethod
     def revoke_key(*, key_id: str) -> Call:

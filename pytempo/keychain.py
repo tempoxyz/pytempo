@@ -79,6 +79,18 @@ def _validate_u256(instance: object, attribute: object, value: int) -> None:
         raise ValueError(f"limit must be in [0, 2**256 - 1], got {value}")
 
 
+def _validate_u64(instance: object, attribute: object, value: int) -> None:
+    if not (0 <= value <= 2**64 - 1):
+        raise ValueError(f"value must be in [0, 2**64 - 1], got {value}")
+
+
+def _validate_optional_u64(
+    instance: object, attribute: object, value: int | None
+) -> None:
+    if value is not None and not (0 <= value <= 2**64 - 1):
+        raise ValueError(f"value must be in [0, 2**64 - 1], got {value}")
+
+
 @attrs.define(frozen=True)
 class TokenLimit:
     """Token spending limit for access keys.
@@ -88,13 +100,15 @@ class TokenLimit:
 
     Args:
         token: TIP20 token address
-        limit: Maximum spending amount for this token (enforced over the key's lifetime)
+        limit: Maximum spending amount for this token
+        period: Limit period in seconds (0 = one-time / lifetime limit)
     """
 
     token: Address = attrs.field(
         converter=as_address, validator=validate_nonempty_address
     )
     limit: int = attrs.field(validator=_validate_u256)
+    period: int = attrs.field(default=0, validator=_validate_u64)
 
     def to_rlp(self) -> list:
         return [bytes(self.token), self.limit]
@@ -279,6 +293,156 @@ class CallScope:
 
 
 # ---------------------------------------------------------------------------
+# Key restrictions
+# ---------------------------------------------------------------------------
+
+
+def _convert_token_limits(
+    value: tuple[TokenLimit, ...] | list[TokenLimit] | None,
+) -> tuple[TokenLimit, ...] | None:
+    return None if value is None else tuple(value)
+
+
+def _convert_call_scopes(
+    value: tuple[CallScope, ...] | list[CallScope] | None,
+) -> tuple[CallScope, ...] | None:
+    return None if value is None else tuple(value)
+
+
+@attrs.define(frozen=True)
+class KeyRestrictions:
+    """Access-key restrictions used for AccountKeychain call builders.
+
+    Pass to :meth:`~pytempo.contracts.AccountKeychain.authorize_key` and use
+    :meth:`is_call_allowed` for local permission checks.
+
+    Args:
+        expiry: Unix timestamp when the key expires.  ``None`` means never.
+        limits: Optional token spending limits.
+            ``None`` means unlimited, ``()`` means deny all spending.
+        allowed_calls: Optional call scope allowlist.
+            ``None`` means unrestricted (any call allowed), ``()`` means
+            deny all calls.
+
+    Examples::
+
+        from pytempo import KeyRestrictions, CallScope, TokenLimit
+
+        # Unrestricted key that expires
+        r = KeyRestrictions(expiry=1893456000)
+
+        # Scoped to TIP-20 transfers with a spending limit
+        r = KeyRestrictions(
+            expiry=1893456000,
+            limits=[TokenLimit(token=ALPHA_USD, limit=1000)],
+            allowed_calls=[CallScope.transfer(target=ALPHA_USD)],
+        )
+    """
+
+    expiry: int | None = attrs.field(default=None, validator=_validate_optional_u64)
+    limits: tuple[TokenLimit, ...] | None = attrs.field(
+        default=None, converter=_convert_token_limits
+    )
+    allowed_calls: tuple[CallScope, ...] | None = attrs.field(
+        default=None, converter=_convert_call_scopes
+    )
+
+    # -- Convenience constructors -------------------------------------------
+
+    @classmethod
+    def no_spending(cls) -> KeyRestrictions:
+        """Deny all spending (enforce limits with an empty allowlist)."""
+        return cls(limits=())
+
+    @classmethod
+    def no_calls(cls) -> KeyRestrictions:
+        """Deny all calls (scoped mode with an empty allowlist)."""
+        return cls(allowed_calls=())
+
+    # -- Introspection ------------------------------------------------------
+
+    def is_unrestricted(self) -> bool:
+        """Return ``True`` if calls are unrestricted (no allowlist set)."""
+        return self.allowed_calls is None
+
+    def is_call_allowed(self, target: BytesLike, input_data: bytes = b"") -> bool:
+        """Check whether a call to *target* with *input_data* is permitted.
+
+        Resolution order (matches the Rust implementation):
+
+        1. No scopes configured → unrestricted, always allowed.
+        2. Target not in any scope → denied.
+        3. Scope has no selector rules → any call to that target is allowed.
+        4. Selector not in rules → denied.
+        5. Rule has no recipients → any recipient is allowed.
+        6. Otherwise the first ABI word after the selector must match an
+           allowed recipient.
+        """
+        if self.allowed_calls is None:
+            return True
+
+        addr = as_address(target)
+
+        scope = next(
+            (s for s in self.allowed_calls if s.target == addr),
+            None,
+        )
+        if scope is None:
+            return False
+
+        rules = scope.selector_rules
+        if not rules:
+            return True
+
+        if len(input_data) < 4:
+            return False
+
+        selector = Selector(input_data[:4])
+        rule = next(
+            (r for r in rules if r.selector == selector),
+            None,
+        )
+        if rule is None:
+            return False
+
+        if not rule.recipients:
+            return True
+
+        if len(input_data) < 36:
+            return False
+
+        word = input_data[4:36]
+        recipient = as_address(word[12:])
+        return recipient in rule.recipients
+
+    # -- ABI encoding -------------------------------------------------------
+
+    def to_abi_tuple(self) -> tuple:
+        """Convert to ABI-encodable ``KeyRestrictions`` struct.
+
+        Returns the tuple ``(expiry, enforceLimits, limits, allowAnyCalls,
+        allowedCalls)`` expected by the ``authorizeKey`` precompile.
+        """
+        limit_tuples = (
+            [(bytes(lim.token), lim.limit, lim.period) for lim in self.limits]
+            if self.limits is not None
+            else []
+        )
+        call_tuples = (
+            [s.to_abi_tuple() for s in self.allowed_calls]
+            if self.allowed_calls is not None
+            else []
+        )
+        return (
+            self.expiry if self.expiry is not None else 2**64 - 1,
+            self.limits is not None,
+            limit_tuples,
+            self.allowed_calls is None,
+            call_tuples,
+        )
+
+
+# ---------------------------------------------------------------------------
 # Key authorization
 # ---------------------------------------------------------------------------
 
@@ -322,6 +486,16 @@ class KeyAuthorization:
     limits: tuple[TokenLimit, ...] | None = attrs.field(
         default=None, converter=_convert_limits
     )
+
+    def __attrs_post_init__(self) -> None:
+        if self.limits:
+            for lim in self.limits:
+                if lim.period != 0:
+                    raise ValueError(
+                        "inline KeyAuthorization does not support periodic limits "
+                        f"(token={bytes(lim.token).hex()}, period={lim.period}); "
+                        "use AccountKeychain.authorize_key() with KeyRestrictions instead"
+                    )
 
     def as_rlp_payload(self) -> list:
         """Return the RLP-encodable list representation."""
