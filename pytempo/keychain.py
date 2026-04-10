@@ -79,6 +79,18 @@ def _validate_u256(instance: object, attribute: object, value: int) -> None:
         raise ValueError(f"limit must be in [0, 2**256 - 1], got {value}")
 
 
+def _validate_u64(instance: object, attribute: object, value: int) -> None:
+    if not (0 <= value <= 2**64 - 1):
+        raise ValueError(f"value must be in [0, 2**64 - 1], got {value}")
+
+
+def _validate_optional_u64(
+    instance: object, attribute: object, value: int | None
+) -> None:
+    if value is not None and not (0 <= value <= 2**64 - 1):
+        raise ValueError(f"value must be in [0, 2**64 - 1], got {value}")
+
+
 @attrs.define(frozen=True)
 class TokenLimit:
     """Token spending limit for access keys.
@@ -96,7 +108,7 @@ class TokenLimit:
         converter=as_address, validator=validate_nonempty_address
     )
     limit: int = attrs.field(validator=_validate_u256)
-    period: int = attrs.field(default=0, validator=attrs.validators.ge(0))
+    period: int = attrs.field(default=0, validator=_validate_u64)
 
     def to_rlp(self) -> list:
         return [bytes(self.token), self.limit]
@@ -327,7 +339,7 @@ class KeyRestrictions:
         )
     """
 
-    expiry: int | None = attrs.field(default=None)
+    expiry: int | None = attrs.field(default=None, validator=_validate_optional_u64)
     limits: tuple[TokenLimit, ...] | None = attrs.field(
         default=None, converter=_convert_token_limits
     )
@@ -474,6 +486,16 @@ class KeyAuthorization:
     limits: tuple[TokenLimit, ...] | None = attrs.field(
         default=None, converter=_convert_limits
     )
+
+    def __attrs_post_init__(self) -> None:
+        if self.limits:
+            for lim in self.limits:
+                if lim.period != 0:
+                    raise ValueError(
+                        "inline KeyAuthorization does not support periodic limits "
+                        f"(token={bytes(lim.token).hex()}, period={lim.period}); "
+                        "use AccountKeychain.authorize_key() with KeyRestrictions instead"
+                    )
 
     def as_rlp_payload(self) -> list:
         """Return the RLP-encodable list representation."""

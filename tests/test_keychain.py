@@ -511,6 +511,22 @@ class TestTokenLimit:
         with pytest.raises(AttributeError):
             limit.limit = 2000  # type: ignore[misc]
 
+    def test_period_defaults_to_zero(self):
+        limit = TokenLimit(token="0x" + "a" * 40, limit=1000)
+        assert limit.period == 0
+
+    def test_accepts_valid_period(self):
+        limit = TokenLimit(token="0x" + "a" * 40, limit=1000, period=3600)
+        assert limit.period == 3600
+
+    def test_rejects_negative_period(self):
+        with pytest.raises(ValueError):
+            TokenLimit(token="0x" + "a" * 40, limit=1000, period=-1)
+
+    def test_rejects_period_exceeding_u64(self):
+        with pytest.raises(ValueError):
+            TokenLimit(token="0x" + "a" * 40, limit=1000, period=2**64)
+
 
 class TestKeyAuthorization:
     """Tests for KeyAuthorization attrs model."""
@@ -1106,3 +1122,35 @@ class TestKeyRestrictionsIsCallAllowed:
         r = KeyRestrictions()
         with pytest.raises(AttributeError):
             r.allowed_calls = []  # type: ignore[misc]
+
+    def test_rejects_negative_expiry(self):
+        with pytest.raises(ValueError):
+            KeyRestrictions(expiry=-1)
+
+    def test_rejects_expiry_exceeding_u64(self):
+        with pytest.raises(ValueError):
+            KeyRestrictions(expiry=2**64)
+
+    def test_accepts_max_u64_expiry(self):
+        r = KeyRestrictions(expiry=2**64 - 1)
+        assert r.expiry == 2**64 - 1
+
+
+class TestKeyAuthorizationPeriodicLimits:
+    """KeyAuthorization rejects periodic limits (inline auth doesn't support them)."""
+
+    def test_rejects_periodic_limit(self):
+        with pytest.raises(ValueError, match="periodic limits"):
+            KeyAuthorization(
+                key_id="0x" + "bb" * 20,
+                chain_id=42429,
+                limits=[TokenLimit(token="0x" + "cc" * 20, limit=1000, period=3600)],
+            )
+
+    def test_accepts_zero_period_limit(self):
+        auth = KeyAuthorization(
+            key_id="0x" + "bb" * 20,
+            chain_id=42429,
+            limits=[TokenLimit(token="0x" + "cc" * 20, limit=1000, period=0)],
+        )
+        assert auth.limits is not None
