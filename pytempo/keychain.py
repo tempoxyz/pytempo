@@ -279,6 +279,100 @@ class CallScope:
 
 
 # ---------------------------------------------------------------------------
+# Key restrictions (introspection helpers)
+# ---------------------------------------------------------------------------
+
+
+def _convert_token_limits(
+    value: tuple[TokenLimit, ...] | list[TokenLimit] | None,
+) -> tuple[TokenLimit, ...] | None:
+    return None if value is None else tuple(value)
+
+
+def _convert_call_scopes(
+    value: tuple[CallScope, ...] | list[CallScope] | None,
+) -> tuple[CallScope, ...] | None:
+    return None if value is None else tuple(value)
+
+
+@attrs.define(frozen=True)
+class KeyRestrictions:
+    """Runtime introspection over a set of key restrictions.
+
+    Mirrors ``tempo_alloy::KeyRestrictions``.  Use this to check whether a
+    particular call would be permitted by a configured set of call scopes.
+
+    Args:
+        expiry: Unix timestamp when the key expires.  ``None`` means never.
+        limits: Optional token spending limits.
+        allowed_calls: Optional call scope allowlist.
+            ``None`` means unrestricted (any call allowed).
+    """
+
+    expiry: int | None = attrs.field(default=None)
+    limits: tuple[TokenLimit, ...] | None = attrs.field(
+        default=None, converter=_convert_token_limits
+    )
+    allowed_calls: tuple[CallScope, ...] | None = attrs.field(
+        default=None, converter=_convert_call_scopes
+    )
+
+    def is_unrestricted(self) -> bool:
+        """Return ``True`` if calls are unrestricted (no allowlist set)."""
+        return self.allowed_calls is None
+
+    def is_call_allowed(self, target: BytesLike, input_data: bytes = b"") -> bool:
+        """Check whether a call to *target* with *input_data* is permitted.
+
+        Resolution order (matches the Rust implementation):
+
+        1. No scopes configured → unrestricted, always allowed.
+        2. Target not in any scope → denied.
+        3. Scope has no selector rules → any call to that target is allowed.
+        4. Selector not in rules → denied.
+        5. Rule has no recipients → any recipient is allowed.
+        6. Otherwise the first ABI word after the selector must match an
+           allowed recipient.
+        """
+        if self.allowed_calls is None:
+            return True
+
+        addr = as_address(target)
+
+        scope = next(
+            (s for s in self.allowed_calls if s.target == addr),
+            None,
+        )
+        if scope is None:
+            return False
+
+        rules = scope.selector_rules
+        if not rules:
+            return True
+
+        if len(input_data) < 4:
+            return False
+
+        selector = Selector(input_data[:4])
+        rule = next(
+            (r for r in rules if r.selector == selector),
+            None,
+        )
+        if rule is None:
+            return False
+
+        if not rule.recipients:
+            return True
+
+        if len(input_data) < 36:
+            return False
+
+        word = input_data[4:36]
+        recipient = as_address(word[12:])
+        return recipient in rule.recipients
+
+
+# ---------------------------------------------------------------------------
 # Key authorization
 # ---------------------------------------------------------------------------
 

@@ -6,7 +6,7 @@ import pytest
 from eth_account import Account
 from eth_utils import to_bytes
 
-from pytempo import Call, CallScope, SelectorRule, TempoTransaction
+from pytempo import Call, CallScope, KeyRestrictions, SelectorRule, TempoTransaction
 from pytempo.contracts import ALPHA_USD
 from pytempo.contracts.account_keychain import AccountKeychain
 from pytempo.contracts.addresses import ACCOUNT_KEYCHAIN_ADDRESS
@@ -943,3 +943,119 @@ class TestCreateKeyAuthorizationCompat:
             limits=(TokenLimit(token="0x" + "c" * 40, limit=1000),),
         )
         assert via_wrapper.rlp_encode() == via_direct.rlp_encode()
+
+
+# ---------------------------------------------------------------------------
+# KeyRestrictions introspection
+# ---------------------------------------------------------------------------
+
+_TRANSFER_SELECTOR = bytes.fromhex("a9059cbb")
+
+
+class TestKeyRestrictionsIsUnrestricted:
+    """Tests for KeyRestrictions.is_unrestricted."""
+
+    def test_default_is_unrestricted(self):
+        r = KeyRestrictions()
+        assert r.is_unrestricted()
+
+    def test_with_scopes_is_not_unrestricted(self):
+        scope = CallScope.unrestricted(target="0x" + "aa" * 20)
+        r = KeyRestrictions(allowed_calls=[scope])
+        assert not r.is_unrestricted()
+
+    def test_empty_scopes_is_not_unrestricted(self):
+        r = KeyRestrictions(allowed_calls=[])
+        assert not r.is_unrestricted()
+
+
+class TestKeyRestrictionsIsCallAllowed:
+    """Tests mirroring tempo_alloy::KeyRestrictions::is_call_allowed."""
+
+    def test_unrestricted_allows_everything(self):
+        r = KeyRestrictions()
+        target = "0x" + "22" * 20
+        assert r.is_call_allowed(target)
+        assert r.is_call_allowed(target, b"\xaa\xbb\xcc\xdd")
+
+    def test_empty_scopes_denies_all(self):
+        r = KeyRestrictions(allowed_calls=[])
+        target = "0x" + "22" * 20
+        assert not r.is_call_allowed(target, b"\xaa\xbb\xcc\xdd")
+
+    def test_target_not_in_scope(self):
+        token = ALPHA_USD
+        other = "0x" + "33" * 20
+        r = KeyRestrictions(
+            allowed_calls=[CallScope.unrestricted(target=token)],
+        )
+        assert not r.is_call_allowed(other, b"\xaa\xbb\xcc\xdd")
+
+    def test_no_selector_rules_allows_any_call(self):
+        target = "0x" + "aa" * 20
+        r = KeyRestrictions(
+            allowed_calls=[CallScope.unrestricted(target=target)],
+        )
+        assert r.is_call_allowed(target, b"\xaa\xbb\xcc\xdd")
+        assert r.is_call_allowed(target)
+
+    def test_selector_match(self):
+        target = "0x" + "aa" * 20
+        sel = bytes.fromhex("aabbccdd")
+        r = KeyRestrictions(
+            allowed_calls=[CallScope.with_selector(target=target, selector=sel)],
+        )
+        assert r.is_call_allowed(target, b"\xaa\xbb\xcc\xdd")
+        assert not r.is_call_allowed(target, b"\x11\x22\x33\x44")
+        assert not r.is_call_allowed(target, b"\xaa\xbb")
+
+    def test_transfer_with_recipients(self):
+        token = ALPHA_USD
+        allowed = "0x" + "44" * 20
+
+        r = KeyRestrictions(
+            allowed_calls=[CallScope.transfer(target=token, recipients=[allowed])],
+        )
+
+        # Valid transfer calldata with allowed recipient
+        input_ok = bytearray()
+        input_ok.extend(_TRANSFER_SELECTOR)
+        input_ok.extend(b"\x00" * 12)
+        input_ok.extend(bytes.fromhex("44" * 20))
+        input_ok.extend(b"\x00" * 32)
+        assert r.is_call_allowed(token, bytes(input_ok))
+
+        # Same selector but denied recipient
+        input_bad = bytearray()
+        input_bad.extend(_TRANSFER_SELECTOR)
+        input_bad.extend(b"\x00" * 12)
+        input_bad.extend(bytes.fromhex("55" * 20))
+        input_bad.extend(b"\x00" * 32)
+        assert not r.is_call_allowed(token, bytes(input_bad))
+
+    def test_recipient_word_too_short(self):
+        token = ALPHA_USD
+        allowed = "0x" + "44" * 20
+        r = KeyRestrictions(
+            allowed_calls=[CallScope.transfer(target=token, recipients=[allowed])],
+        )
+        # Selector only, no recipient word
+        assert not r.is_call_allowed(token, _TRANSFER_SELECTOR)
+
+    def test_no_recipients_allows_any(self):
+        token = ALPHA_USD
+        r = KeyRestrictions(
+            allowed_calls=[CallScope.transfer(target=token, recipients=[])],
+        )
+
+        input_data = bytearray()
+        input_data.extend(_TRANSFER_SELECTOR)
+        input_data.extend(b"\x00" * 12)
+        input_data.extend(bytes.fromhex("99" * 20))
+        input_data.extend(b"\x00" * 32)
+        assert r.is_call_allowed(token, bytes(input_data))
+
+    def test_frozen(self):
+        r = KeyRestrictions()
+        with pytest.raises(AttributeError):
+            r.allowed_calls = []  # type: ignore[misc]
