@@ -53,7 +53,8 @@ class AccountKeychain:
             key_id: The access key address to authorize.
             signature_type: Type of key being authorized.
             restrictions: Key restrictions (expiry, limits, call scopes).
-            legacy: Use pre-T3 flat-parameter encoding.
+            legacy: Use pre-T3 flat-parameter encoding. Pass ``True``
+                until T3 is activated, then remove this argument.
         """
         if legacy:
             if restrictions.allowed_calls is not None:
