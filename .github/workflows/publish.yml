@@ -15,8 +15,6 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          persist-credentials: false
 
       - uses: wevm/changelogs@04ccca87f4785039ced6da0fff27ba29c0dd9f5c # master
         with:
