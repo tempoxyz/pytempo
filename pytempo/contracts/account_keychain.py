@@ -3,33 +3,26 @@
 Returns :class:`~pytempo.Call` objects ready to use in a
 :class:`~pytempo.TempoTransaction`::
 
-    from pytempo import SignatureType
+    from pytempo import KeyRestrictions, SignatureType
     from pytempo.contracts import AccountKeychain
 
-    # T3+ (default)
     call = AccountKeychain.authorize_key(
         key_id=access_key.address,
         signature_type=SignatureType.SECP256K1,
-        expiry=2**64 - 1,
-    )
-
-    # Pre-T3
-    call = AccountKeychain.authorize_key(
-        key_id=access_key.address,
-        signature_type=SignatureType.SECP256K1,
-        expiry=2**64 - 1,
-        legacy=True,
+        restrictions=KeyRestrictions(expiry=2**64 - 1),
     )
 
     tx = TempoTransaction.create(..., calls=(call,))
 """
 
+from __future__ import annotations
+
+import warnings
 from collections.abc import Sequence
-from typing import Optional
 
 from eth_utils import to_checksum_address
 
-from pytempo.keychain import CallScope, SignatureType
+from pytempo.keychain import CallScope, KeyRestrictions, SignatureType, TokenLimit
 from pytempo.models import Call
 
 from ._encode import encode_calldata
@@ -37,6 +30,68 @@ from .abis import ACCOUNT_KEYCHAIN_ABI
 from .addresses import ACCOUNT_KEYCHAIN_ADDRESS
 
 _ABI = ACCOUNT_KEYCHAIN_ABI
+
+
+def _resolve_restrictions(
+    *,
+    restrictions: KeyRestrictions | None,
+    expiry: int | None,
+    enforce_limits: bool,
+    limits: Sequence[tuple[str, int] | tuple[str, int, int]] | None,
+    allow_any_calls: bool,
+    allowed_calls: Sequence[CallScope] | None,
+) -> KeyRestrictions:
+    """Build a ``KeyRestrictions`` from either the new or deprecated params."""
+    _has_legacy = (
+        expiry is not None
+        or enforce_limits
+        or limits is not None
+        or not allow_any_calls
+        or allowed_calls is not None
+    )
+
+    if restrictions is not None:
+        if _has_legacy:
+            raise ValueError(
+                "cannot combine 'restrictions' with deprecated individual "
+                "params (expiry, limits, allowed_calls, …)"
+            )
+        return restrictions
+
+    if not _has_legacy:
+        return KeyRestrictions()
+
+    warnings.warn(
+        "Passing individual expiry/limits/allowed_calls params is deprecated. "
+        "Use restrictions=KeyRestrictions(...) instead.",
+        DeprecationWarning,
+        stacklevel=3,
+    )
+
+    if allowed_calls and allow_any_calls:
+        raise ValueError(
+            "allowed_calls was provided but allow_any_calls=True; "
+            "pass allow_any_calls=False to create a scoped key"
+        )
+
+    token_limits: list[TokenLimit] | None = None
+    if enforce_limits or limits is not None:
+        token_limits = []
+        if limits:
+            for lim in limits:
+                t, a = lim[0], lim[1]
+                p = lim[2] if len(lim) > 2 else 0  # type: ignore[arg-type]
+                token_limits.append(TokenLimit(token=t, limit=a, period=p))
+
+    resolved_calls: list[CallScope] | None = None
+    if not allow_any_calls:
+        resolved_calls = list(allowed_calls) if allowed_calls else []
+
+    return KeyRestrictions(
+        expiry=expiry,
+        limits=token_limits,
+        allowed_calls=resolved_calls,
+    )
 
 
 class AccountKeychain:
@@ -52,73 +107,70 @@ class AccountKeychain:
         *,
         key_id: str,
         signature_type: SignatureType,
-        expiry: int,
-        enforce_limits: bool = False,
-        limits: Optional[Sequence[tuple[str, int] | tuple[str, int, int]]] = None,
-        allow_any_calls: bool = True,
-        allowed_calls: Optional[Sequence[CallScope]] = None,
+        restrictions: KeyRestrictions | None = None,
         legacy: bool = False,
+        # Deprecated individual params — use ``restrictions`` instead.
+        expiry: int | None = None,
+        enforce_limits: bool = False,
+        limits: Sequence[tuple[str, int] | tuple[str, int, int]] | None = None,
+        allow_any_calls: bool = True,
+        allowed_calls: Sequence[CallScope] | None = None,
     ) -> Call:
         """Build an ``authorizeKey`` call.
 
-        Uses the TIP-1011 ``KeyRestrictions`` struct encoding by default (T3+).
-        Pass ``legacy=True`` for the pre-T3 flat-parameter encoding.
+        Pass a :class:`~pytempo.KeyRestrictions` for the recommended API::
+
+            AccountKeychain.authorize_key(
+                key_id=addr,
+                signature_type=SignatureType.SECP256K1,
+                restrictions=KeyRestrictions(expiry=2**64 - 1),
+            )
+
+        The individual ``expiry`` / ``limits`` / ``allowed_calls`` params are
+        deprecated but still supported for backward compatibility.
 
         Args:
             key_id: The access key address to authorize.
-            signature_type: Type of key being authorized (SignatureType.SECP256K1, P256, or WEBAUTHN)
-            expiry: Unix timestamp when key expires (use ``2**64 - 1`` for never).
-            enforce_limits: Whether to enforce spending limits.
-            limits: List of ``(token_address, amount)`` or ``(token_address, amount, period)`` tuples.
-                Period defaults to 0 (one-time limit) if omitted.
-            allow_any_calls: Whether the key can call any contract (default True).
-                Ignored when ``legacy=True``.
-            allowed_calls: List of :class:`~pytempo.CallScope` restricting
-                which contracts/functions the key can call.
-                Only used when ``allow_any_calls`` is False.
-                Ignored when ``legacy=True``.
-            legacy: Use pre-T3 flat-parameter encoding. Pass ``True`` until T3 is activated, then remove this argument.
+            signature_type: Type of key being authorized.
+            restrictions: Key restrictions (expiry, limits, call scopes).
+            legacy: Use pre-T3 flat-parameter encoding.
         """
-        if legacy and (allowed_calls or not allow_any_calls):
-            raise ValueError("legacy=True does not support call restrictions")
-
-        if allowed_calls and allow_any_calls:
-            raise ValueError(
-                "allowed_calls was provided but allow_any_calls=True; "
-                "pass allow_any_calls=False to create a scoped key"
-            )
+        r = _resolve_restrictions(
+            restrictions=restrictions,
+            expiry=expiry,
+            enforce_limits=enforce_limits,
+            limits=limits,
+            allow_any_calls=allow_any_calls,
+            allowed_calls=allowed_calls,
+        )
 
         if legacy:
+            if r.allowed_calls is not None:
+                raise ValueError("legacy=True does not support call restrictions")
+            if r.limits and any(lim.period != 0 for lim in r.limits):
+                raise ValueError("legacy=True does not support periodic limits")
+
             limit_tuples = (
-                [(t, a) for t, a, *_ in ((*lim, 0)[:3] for lim in limits)]
-                if limits
+                [(bytes(lim.token).hex(), lim.limit) for lim in r.limits]
+                if r.limits
                 else []
             )
             data = encode_calldata(
                 _ABI,
                 "authorizeKey",
-                [key_id, int(signature_type), expiry, enforce_limits, limit_tuples],
+                [
+                    key_id,
+                    int(signature_type),
+                    r.expiry if r.expiry is not None else 2**64 - 1,
+                    r.limits is not None,
+                    limit_tuples,
+                ],
             )
         else:
-            limit_tuples = (
-                [(t, a, p) for t, a, p in ((*lim, 0)[:3] for lim in limits)]
-                if limits
-                else []
-            )
-            call_tuples = (
-                [s.to_abi_tuple() for s in allowed_calls] if allowed_calls else []
-            )
-            config = (
-                expiry,
-                enforce_limits,
-                limit_tuples,
-                allow_any_calls,
-                call_tuples,
-            )
             data = encode_calldata(
                 _ABI,
                 "authorizeKey",
-                [key_id, int(signature_type), config],
+                [key_id, int(signature_type), r.to_abi_tuple()],
             )
 
         return Call.create(to=ACCOUNT_KEYCHAIN_ADDRESS, data=data)

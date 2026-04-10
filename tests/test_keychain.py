@@ -860,8 +860,84 @@ class TestSetAndRemoveAllowedCalls:
         assert call.data is not None
 
 
+class TestAuthorizeKeyWithRestrictions:
+    """Tests for authorize_key with KeyRestrictions."""
+
+    def test_basic_restrictions(self):
+        r = KeyRestrictions(expiry=2**64 - 1)
+        call = AccountKeychain.authorize_key(
+            key_id="0x" + "11" * 20,
+            signature_type=SignatureType.SECP256K1,
+            restrictions=r,
+        )
+        assert call.data is not None
+
+    def test_restrictions_with_call_scopes(self):
+        scope = CallScope.transfer(target=ALPHA_USD)
+        r = KeyRestrictions(
+            expiry=2**64 - 1,
+            allowed_calls=[scope],
+        )
+        call = AccountKeychain.authorize_key(
+            key_id="0x" + "11" * 20,
+            signature_type=SignatureType.SECP256K1,
+            restrictions=r,
+        )
+        assert call.data is not None
+
+    def test_restrictions_with_limits(self):
+        r = KeyRestrictions(
+            expiry=1893456000,
+            limits=[TokenLimit(token="0x" + "cc" * 20, limit=1000)],
+        )
+        call = AccountKeychain.authorize_key(
+            key_id="0x" + "11" * 20,
+            signature_type=SignatureType.SECP256K1,
+            restrictions=r,
+        )
+        assert call.data is not None
+
+    def test_rejects_mixed_restrictions_and_legacy_params(self):
+        r = KeyRestrictions(expiry=2**64 - 1)
+        with pytest.raises(ValueError, match="cannot combine"):
+            AccountKeychain.authorize_key(
+                key_id="0x" + "11" * 20,
+                signature_type=SignatureType.SECP256K1,
+                restrictions=r,
+                expiry=999,
+            )
+
+    def test_legacy_with_restrictions_rejects_call_scopes(self):
+        scope = CallScope.transfer(target=ALPHA_USD)
+        r = KeyRestrictions(allowed_calls=[scope])
+        with pytest.raises(ValueError, match="call restrictions"):
+            AccountKeychain.authorize_key(
+                key_id="0x" + "11" * 20,
+                signature_type=SignatureType.SECP256K1,
+                restrictions=r,
+                legacy=True,
+            )
+
+    def test_default_restrictions_produces_valid_call(self):
+        call = AccountKeychain.authorize_key(
+            key_id="0x" + "11" * 20,
+            signature_type=SignatureType.SECP256K1,
+            restrictions=KeyRestrictions(),
+        )
+        assert call.data is not None
+
+    def test_no_calls_restrictions(self):
+        r = KeyRestrictions.no_calls()
+        call = AccountKeychain.authorize_key(
+            key_id="0x" + "11" * 20,
+            signature_type=SignatureType.SECP256K1,
+            restrictions=r,
+        )
+        assert call.data is not None
+
+
 class TestAuthorizeKeyGuards:
-    """Tests for authorize_key argument validation."""
+    """Tests for authorize_key deprecated param validation."""
 
     def test_rejects_allowed_calls_with_allow_any_calls_true(self):
         scope = CallScope.transfer(target=ALPHA_USD)
@@ -875,7 +951,7 @@ class TestAuthorizeKeyGuards:
 
     def test_rejects_legacy_with_call_restrictions(self):
         scope = CallScope.transfer(target=ALPHA_USD)
-        with pytest.raises(ValueError, match="legacy"):
+        with pytest.raises(ValueError, match="legacy|call restrictions"):
             AccountKeychain.authorize_key(
                 key_id="0x" + "11" * 20,
                 signature_type=SignatureType.SECP256K1,

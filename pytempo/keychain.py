@@ -88,13 +88,15 @@ class TokenLimit:
 
     Args:
         token: TIP20 token address
-        limit: Maximum spending amount for this token (enforced over the key's lifetime)
+        limit: Maximum spending amount for this token
+        period: Limit period in seconds (0 = one-time / lifetime limit)
     """
 
     token: Address = attrs.field(
         converter=as_address, validator=validate_nonempty_address
     )
     limit: int = attrs.field(validator=_validate_u256)
+    period: int = attrs.field(default=0, validator=attrs.validators.ge(0))
 
     def to_rlp(self) -> list:
         return [bytes(self.token), self.limit]
@@ -279,7 +281,7 @@ class CallScope:
 
 
 # ---------------------------------------------------------------------------
-# Key restrictions (introspection helpers)
+# Key restrictions
 # ---------------------------------------------------------------------------
 
 
@@ -297,16 +299,33 @@ def _convert_call_scopes(
 
 @attrs.define(frozen=True)
 class KeyRestrictions:
-    """Runtime introspection over a set of key restrictions.
+    """Access-key restrictions used for AccountKeychain call builders.
 
-    Mirrors ``tempo_alloy::KeyRestrictions``.  Use this to check whether a
-    particular call would be permitted by a configured set of call scopes.
+    Mirrors ``tempo_alloy::KeyRestrictions``.  Pass to
+    :meth:`~pytempo.contracts.AccountKeychain.authorize_key` and use
+    :meth:`is_call_allowed` for local permission checks.
 
     Args:
         expiry: Unix timestamp when the key expires.  ``None`` means never.
         limits: Optional token spending limits.
+            ``None`` means unlimited, ``()`` means deny all spending.
         allowed_calls: Optional call scope allowlist.
-            ``None`` means unrestricted (any call allowed).
+            ``None`` means unrestricted (any call allowed), ``()`` means
+            deny all calls.
+
+    Examples::
+
+        from pytempo import KeyRestrictions, CallScope, TokenLimit
+
+        # Unrestricted key that expires
+        r = KeyRestrictions(expiry=1893456000)
+
+        # Scoped to TIP-20 transfers with a spending limit
+        r = KeyRestrictions(
+            expiry=1893456000,
+            limits=[TokenLimit(token=ALPHA_USD, limit=1000)],
+            allowed_calls=[CallScope.transfer(target=ALPHA_USD)],
+        )
     """
 
     expiry: int | None = attrs.field(default=None)
@@ -316,6 +335,20 @@ class KeyRestrictions:
     allowed_calls: tuple[CallScope, ...] | None = attrs.field(
         default=None, converter=_convert_call_scopes
     )
+
+    # -- Convenience constructors -------------------------------------------
+
+    @classmethod
+    def no_spending(cls) -> KeyRestrictions:
+        """Deny all spending (enforce limits with an empty allowlist)."""
+        return cls(limits=())
+
+    @classmethod
+    def no_calls(cls) -> KeyRestrictions:
+        """Deny all calls (scoped mode with an empty allowlist)."""
+        return cls(allowed_calls=())
+
+    # -- Introspection ------------------------------------------------------
 
     def is_unrestricted(self) -> bool:
         """Return ``True`` if calls are unrestricted (no allowlist set)."""
@@ -370,6 +403,32 @@ class KeyRestrictions:
         word = input_data[4:36]
         recipient = as_address(word[12:])
         return recipient in rule.recipients
+
+    # -- ABI encoding -------------------------------------------------------
+
+    def to_abi_tuple(self) -> tuple:
+        """Convert to ABI-encodable ``KeyRestrictions`` struct.
+
+        Returns the tuple ``(expiry, enforceLimits, limits, allowAnyCalls,
+        allowedCalls)`` expected by the ``authorizeKey`` precompile.
+        """
+        limit_tuples = (
+            [(bytes(lim.token), lim.limit, lim.period) for lim in self.limits]
+            if self.limits is not None
+            else []
+        )
+        call_tuples = (
+            [s.to_abi_tuple() for s in self.allowed_calls]
+            if self.allowed_calls is not None
+            else []
+        )
+        return (
+            self.expiry if self.expiry is not None else 2**64 - 1,
+            self.limits is not None,
+            limit_tuples,
+            self.allowed_calls is None,
+            call_tuples,
+        )
 
 
 # ---------------------------------------------------------------------------
