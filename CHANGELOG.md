@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.5.0 (2026-04-10)
+
+### Minor Changes
+
+- Added TIP-1011 `authorizeKey` support with `KeyRestrictions` struct (T3+) as the new `authorize_key` method, and renamed the previous flat-params variant to `authorize_key_legacy` for pre-T3 compatibility. Updated `IAccountKeychain` ABI with the new function signature and `LegacyAuthorizeKeySelectorChanged` error. (by @DerekCofausper, [#46](https://github.com/tempoxyz/pytempo/pull/46))
+- Added `KeyRestrictions` class for access-key restriction management and integrated it into `AccountKeychain.authorize_key()`.
+- `KeyRestrictions` with `expiry`, `limits`, `allowed_calls` fields
+- `is_unrestricted()` and `is_call_allowed(target, input_data)` introspection helpers
+- `to_abi_tuple()` for ABI encoding
+- `no_spending()` / `no_calls()` convenience constructors
+- `TokenLimit.period` field with uint64 validation
+- `AccountKeychain.authorize_key()` now takes `restrictions=KeyRestrictions(...)` (breaking)
+- `AccountKeychain.authorize_key_legacy()` convenience method
+- `KeyAuthorization` rejects periodic limits with a clear error
+- `CallScope.with_selector()` documented in access-keys guide (by @DerekCofausper, [#46](https://github.com/tempoxyz/pytempo/pull/46))
+- Added `AccountKeychain.get_key()` method to query key info from the AccountKeychain precompile, returning signature type, key ID, expiry, enforce limits, and revocation status. Added integration tests for keychain selectors, spending limits, inline key authorization, transaction validation, and encoding round-trips, plus unit tests for the new `get_key` method. (by @DerekCofausper, [#46](https://github.com/tempoxyz/pytempo/pull/46))
+- Added `SelectorRule` class for per-selector recipient filtering in call scope restrictions. Extended `CallScope` factory methods (`transfer`, `approve`, `transfer_with_memo`) to accept optional `recipients` lists, and added `CallScope.with_selector` for arbitrary 4-byte selector scoping. Added `AccountKeychain.set_allowed_calls` and `remove_allowed_calls` static methods, and added validation guards to `authorize_key` rejecting conflicting `legacy`/`allowed_calls` combinations. (by @DerekCofausper, [#46](https://github.com/tempoxyz/pytempo/pull/46))
+
 ## 0.4.0 (2026-03-16)
 
 ### Minor Changes
