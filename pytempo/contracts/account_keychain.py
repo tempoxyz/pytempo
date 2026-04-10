@@ -17,12 +17,11 @@ Returns :class:`~pytempo.Call` objects ready to use in a
 
 from __future__ import annotations
 
-import warnings
 from collections.abc import Sequence
 
 from eth_utils import to_checksum_address
 
-from pytempo.keychain import CallScope, KeyRestrictions, SignatureType, TokenLimit
+from pytempo.keychain import CallScope, KeyRestrictions, SignatureType
 from pytempo.models import Call
 
 from ._encode import encode_calldata
@@ -30,68 +29,6 @@ from .abis import ACCOUNT_KEYCHAIN_ABI
 from .addresses import ACCOUNT_KEYCHAIN_ADDRESS
 
 _ABI = ACCOUNT_KEYCHAIN_ABI
-
-
-def _resolve_restrictions(
-    *,
-    restrictions: KeyRestrictions | None,
-    expiry: int | None,
-    enforce_limits: bool,
-    limits: Sequence[tuple[str, int] | tuple[str, int, int]] | None,
-    allow_any_calls: bool,
-    allowed_calls: Sequence[CallScope] | None,
-) -> KeyRestrictions:
-    """Build a ``KeyRestrictions`` from either the new or deprecated params."""
-    _has_legacy = (
-        expiry is not None
-        or enforce_limits
-        or limits is not None
-        or not allow_any_calls
-        or allowed_calls is not None
-    )
-
-    if restrictions is not None:
-        if _has_legacy:
-            raise ValueError(
-                "cannot combine 'restrictions' with deprecated individual "
-                "params (expiry, limits, allowed_calls, …)"
-            )
-        return restrictions
-
-    if not _has_legacy:
-        return KeyRestrictions()
-
-    warnings.warn(
-        "Passing individual expiry/limits/allowed_calls params is deprecated. "
-        "Use restrictions=KeyRestrictions(...) instead.",
-        DeprecationWarning,
-        stacklevel=3,
-    )
-
-    if allowed_calls and allow_any_calls:
-        raise ValueError(
-            "allowed_calls was provided but allow_any_calls=True; "
-            "pass allow_any_calls=False to create a scoped key"
-        )
-
-    token_limits: list[TokenLimit] | None = None
-    if enforce_limits or limits is not None:
-        token_limits = []
-        if limits:
-            for lim in limits:
-                t, a = lim[0], lim[1]
-                p = lim[2] if len(lim) > 2 else 0  # type: ignore[arg-type]
-                token_limits.append(TokenLimit(token=t, limit=a, period=p))
-
-    resolved_calls: list[CallScope] | None = None
-    if not allow_any_calls:
-        resolved_calls = list(allowed_calls) if allowed_calls else []
-
-    return KeyRestrictions(
-        expiry=expiry,
-        limits=token_limits,
-        allowed_calls=resolved_calls,
-    )
 
 
 class AccountKeychain:
@@ -107,27 +44,10 @@ class AccountKeychain:
         *,
         key_id: str,
         signature_type: SignatureType,
-        restrictions: KeyRestrictions | None = None,
+        restrictions: KeyRestrictions,
         legacy: bool = False,
-        # Deprecated individual params — use ``restrictions`` instead.
-        expiry: int | None = None,
-        enforce_limits: bool = False,
-        limits: Sequence[tuple[str, int] | tuple[str, int, int]] | None = None,
-        allow_any_calls: bool = True,
-        allowed_calls: Sequence[CallScope] | None = None,
     ) -> Call:
         """Build an ``authorizeKey`` call.
-
-        Pass a :class:`~pytempo.KeyRestrictions` for the recommended API::
-
-            AccountKeychain.authorize_key(
-                key_id=addr,
-                signature_type=SignatureType.SECP256K1,
-                restrictions=KeyRestrictions(expiry=2**64 - 1),
-            )
-
-        The individual ``expiry`` / ``limits`` / ``allowed_calls`` params are
-        deprecated but still supported for backward compatibility.
 
         Args:
             key_id: The access key address to authorize.
@@ -135,24 +55,17 @@ class AccountKeychain:
             restrictions: Key restrictions (expiry, limits, call scopes).
             legacy: Use pre-T3 flat-parameter encoding.
         """
-        r = _resolve_restrictions(
-            restrictions=restrictions,
-            expiry=expiry,
-            enforce_limits=enforce_limits,
-            limits=limits,
-            allow_any_calls=allow_any_calls,
-            allowed_calls=allowed_calls,
-        )
-
         if legacy:
-            if r.allowed_calls is not None:
+            if restrictions.allowed_calls is not None:
                 raise ValueError("legacy=True does not support call restrictions")
-            if r.limits and any(lim.period != 0 for lim in r.limits):
+            if restrictions.limits and any(
+                lim.period != 0 for lim in restrictions.limits
+            ):
                 raise ValueError("legacy=True does not support periodic limits")
 
             limit_tuples = (
-                [(bytes(lim.token).hex(), lim.limit) for lim in r.limits]
-                if r.limits
+                [(bytes(lim.token).hex(), lim.limit) for lim in restrictions.limits]
+                if restrictions.limits
                 else []
             )
             data = encode_calldata(
@@ -161,8 +74,10 @@ class AccountKeychain:
                 [
                     key_id,
                     int(signature_type),
-                    r.expiry if r.expiry is not None else 2**64 - 1,
-                    r.limits is not None,
+                    restrictions.expiry
+                    if restrictions.expiry is not None
+                    else 2**64 - 1,
+                    restrictions.limits is not None,
                     limit_tuples,
                 ],
             )
@@ -170,10 +85,29 @@ class AccountKeychain:
             data = encode_calldata(
                 _ABI,
                 "authorizeKey",
-                [key_id, int(signature_type), r.to_abi_tuple()],
+                [key_id, int(signature_type), restrictions.to_abi_tuple()],
             )
 
         return Call.create(to=ACCOUNT_KEYCHAIN_ADDRESS, data=data)
+
+    @staticmethod
+    def authorize_key_legacy(
+        *,
+        key_id: str,
+        signature_type: SignatureType,
+        restrictions: KeyRestrictions,
+    ) -> Call:
+        """Build a pre-T3 ``authorizeKey`` call.
+
+        Convenience wrapper equivalent to
+        ``authorize_key(..., legacy=True)``.
+        """
+        return AccountKeychain.authorize_key(
+            key_id=key_id,
+            signature_type=signature_type,
+            restrictions=restrictions,
+            legacy=True,
+        )
 
     @staticmethod
     def revoke_key(*, key_id: str) -> Call:

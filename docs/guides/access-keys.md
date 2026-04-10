@@ -82,17 +82,18 @@ print(f"Remaining: {remaining}")
 For on-chain key provisioning via the AccountKeychain precompile, you can restrict which contracts and functions the key is allowed to call:
 
 ```python
-from pytempo import CallScope, SignatureType
+from pytempo import CallScope, KeyRestrictions, SignatureType
 from pytempo.contracts import AccountKeychain, ALPHA_USD
 
 call = AccountKeychain.authorize_key(
     key_id="0xAccessKeyAddress...",
     signature_type=SignatureType.SECP256K1,
-    expiry=2**64 - 1,
-    allow_any_calls=False,
-    allowed_calls=(
-        CallScope.transfer(target=ALPHA_USD),
-        CallScope.approve(target=ALPHA_USD),
+    restrictions=KeyRestrictions(
+        expiry=2**64 - 1,
+        allowed_calls=[
+            CallScope.transfer(target=ALPHA_USD),
+            CallScope.approve(target=ALPHA_USD),
+        ],
     ),
 )
 ```
@@ -103,6 +104,7 @@ Available call scope constructors:
 - `CallScope.transfer(target=...)` — allow `transfer(address,uint256)` on a TIP20 token
 - `CallScope.approve(target=...)` — allow `approve(address,uint256)` on a TIP20 token
 - `CallScope.transfer_with_memo(target=...)` — allow `transferWithMemo(address,uint256,bytes32)` on a TIP20 token
+- `CallScope.with_selector(target=..., selector=...)` — allow an arbitrary 4-byte selector on any contract
 
 ```{note}
 Before T3 is activated, pass ``legacy=True`` to use the pre-T3 encoding::

@@ -897,17 +897,7 @@ class TestAuthorizeKeyWithRestrictions:
         )
         assert call.data is not None
 
-    def test_rejects_mixed_restrictions_and_legacy_params(self):
-        r = KeyRestrictions(expiry=2**64 - 1)
-        with pytest.raises(ValueError, match="cannot combine"):
-            AccountKeychain.authorize_key(
-                key_id="0x" + "11" * 20,
-                signature_type=SignatureType.SECP256K1,
-                restrictions=r,
-                expiry=999,
-            )
-
-    def test_legacy_with_restrictions_rejects_call_scopes(self):
+    def test_legacy_rejects_call_scopes(self):
         scope = CallScope.transfer(target=ALPHA_USD)
         r = KeyRestrictions(allowed_calls=[scope])
         with pytest.raises(ValueError, match="call restrictions"):
@@ -935,40 +925,21 @@ class TestAuthorizeKeyWithRestrictions:
         )
         assert call.data is not None
 
-
-class TestAuthorizeKeyGuards:
-    """Tests for authorize_key deprecated param validation."""
-
-    def test_rejects_allowed_calls_with_allow_any_calls_true(self):
-        scope = CallScope.transfer(target=ALPHA_USD)
-        with pytest.raises(ValueError, match="allow_any_calls"):
-            AccountKeychain.authorize_key(
-                key_id="0x" + "11" * 20,
-                signature_type=SignatureType.SECP256K1,
-                expiry=2**64 - 1,
-                allowed_calls=[scope],
-            )
-
-    def test_rejects_legacy_with_call_restrictions(self):
-        scope = CallScope.transfer(target=ALPHA_USD)
-        with pytest.raises(ValueError, match="legacy|call restrictions"):
-            AccountKeychain.authorize_key(
-                key_id="0x" + "11" * 20,
-                signature_type=SignatureType.SECP256K1,
-                expiry=2**64 - 1,
-                allowed_calls=[scope],
-                allow_any_calls=False,
-                legacy=True,
-            )
-
-    def test_accepts_allowed_calls_with_allow_any_calls_false(self):
-        scope = CallScope.transfer(target=ALPHA_USD)
+    def test_no_spending_restrictions(self):
+        r = KeyRestrictions.no_spending()
         call = AccountKeychain.authorize_key(
             key_id="0x" + "11" * 20,
             signature_type=SignatureType.SECP256K1,
-            expiry=2**64 - 1,
-            allowed_calls=[scope],
-            allow_any_calls=False,
+            restrictions=r,
+        )
+        assert call.data is not None
+
+    def test_authorize_key_legacy_convenience(self):
+        r = KeyRestrictions(expiry=999)
+        call = AccountKeychain.authorize_key_legacy(
+            key_id="0x" + "11" * 20,
+            signature_type=SignatureType.SECP256K1,
+            restrictions=r,
         )
         assert call.data is not None
 

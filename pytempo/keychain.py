@@ -301,8 +301,7 @@ def _convert_call_scopes(
 class KeyRestrictions:
     """Access-key restrictions used for AccountKeychain call builders.
 
-    Mirrors ``tempo_alloy::KeyRestrictions``.  Pass to
-    :meth:`~pytempo.contracts.AccountKeychain.authorize_key` and use
+    Pass to :meth:`~pytempo.contracts.AccountKeychain.authorize_key` and use
     :meth:`is_call_allowed` for local permission checks.
 
     Args:
