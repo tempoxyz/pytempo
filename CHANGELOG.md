@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.1 (2026-04-18)
+
+### Patch Changes
+
+- Hardened CI supply chain security by pinning GitHub Actions to specific commit SHAs, adding SHA256 checksum verification for downloaded binaries, enabling Dependabot for automated dependency updates, and locking tool versions (`uv`, `changelogs`) to prevent supply chain attacks. (by @DerekCofausper, [#48](https://github.com/tempoxyz/pytempo/pull/48))
+
 ## 0.5.0 (2026-04-10)
 
 ### Minor Changes
