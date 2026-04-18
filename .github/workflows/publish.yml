@@ -20,7 +20,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: wevm/changelogs@04ccca87f4785039ced6da0fff27ba29c0dd9f5c # master
+      - uses: wevm/changelogs@54f693643e1bd8469293bdfcbfb647bceb559490 # master
         id: changelogs
         with:
           ecosystem: python
