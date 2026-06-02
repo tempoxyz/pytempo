@@ -10,6 +10,7 @@ Query nonce values for Tempo's 2D nonce system::
     nonce = Nonce.get_nonce(w3, account="0xAccount...", nonce_key=0)
 """
 
+from ._decode import decode_u64
 from ._encode import encode_calldata
 from .abis import NONCE_ABI
 from .addresses import NONCE_ADDRESS
@@ -39,4 +40,4 @@ class Nonce:
         """
         call_data = encode_calldata(_ABI, "getNonce", [account, nonce_key])
         result = w3.eth.call({"to": NONCE_ADDRESS, "data": call_data})
-        return int.from_bytes(result, "big")
+        return decode_u64(result, "getNonce")

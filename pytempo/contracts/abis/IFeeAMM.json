@@ -26,11 +26,6 @@
   },
   {
     "inputs": [],
-    "name": "InvalidCurrency",
-    "type": "error"
-  },
-  {
-    "inputs": [],
     "name": "InvalidSwapCalculation",
     "type": "error"
   },

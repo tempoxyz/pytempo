@@ -1,12 +1,22 @@
 [
   {
     "inputs": [],
+    "name": "CannotChangeWithinBlock",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "DivisionByZero",
     "type": "error"
   },
   {
     "inputs": [],
     "name": "IdenticalAddresses",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "InsufficientFeeTokenBalance",
     "type": "error"
   },
   {
@@ -22,11 +32,6 @@
   {
     "inputs": [],
     "name": "InvalidAmount",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "InvalidCurrency",
     "type": "error"
   },
   {
@@ -589,7 +594,7 @@
     "inputs": [
       {
         "internalType": "address",
-        "name": "",
+        "name": "user",
         "type": "address"
       }
     ],
@@ -608,7 +613,7 @@
     "inputs": [
       {
         "internalType": "address",
-        "name": "",
+        "name": "validator",
         "type": "address"
       }
     ],

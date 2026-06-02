@@ -32,6 +32,7 @@ from .abis import (
     NONCE_ABI,
     STABLECOIN_DEX_ABI,
     TIP20_ABI,
+    TIP20_ROLES_AUTH_ABI,
 )
 from .account_keychain import AccountKeychain
 from .addresses import (
@@ -64,6 +65,7 @@ __all__ = [
     "Nonce",
     # ABIs
     "TIP20_ABI",
+    "TIP20_ROLES_AUTH_ABI",
     "ACCOUNT_KEYCHAIN_ABI",
     "STABLECOIN_DEX_ABI",
     "FEE_MANAGER_ABI",

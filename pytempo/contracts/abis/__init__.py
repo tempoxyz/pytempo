@@ -12,6 +12,7 @@ def _load(name: str) -> list:
 
 
 TIP20_ABI = _load("ITIP20")
+TIP20_ROLES_AUTH_ABI = _load("ITIP20RolesAuth")
 ACCOUNT_KEYCHAIN_ABI = _load("IAccountKeychain")
 STABLECOIN_DEX_ABI = _load("IStablecoinDEX")
 FEE_MANAGER_ABI = _load("IFeeManager")

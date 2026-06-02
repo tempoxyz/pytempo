@@ -16,6 +16,16 @@
   },
   {
     "inputs": [],
+    "name": "InvalidKeyAuthorizationWitness",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "InvalidKeyId",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "InvalidSignatureType",
     "type": "error"
   },
@@ -32,6 +42,11 @@
   {
     "inputs": [],
     "name": "KeyAlreadyRevoked",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "KeyAuthorizationWitnessAlreadyBurned",
     "type": "error"
   },
   {
@@ -137,6 +152,63 @@
         "internalType": "address",
         "name": "publicKey",
         "type": "address"
+      }
+    ],
+    "name": "AdminKeyAuthorized",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "witness",
+        "type": "bytes32"
+      }
+    ],
+    "name": "KeyAuthorizationWitness",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "witness",
+        "type": "bytes32"
+      }
+    ],
+    "name": "KeyAuthorizationWitnessBurned",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "publicKey",
+        "type": "address"
       },
       {
         "indexed": false,
@@ -203,6 +275,29 @@
     ],
     "name": "SpendingLimitUpdated",
     "type": "event"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "keyId",
+        "type": "address"
+      },
+      {
+        "internalType": "enum IAccountKeychain.SignatureType",
+        "name": "signatureType",
+        "type": "uint8"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "witness",
+        "type": "bytes32"
+      }
+    ],
+    "name": "authorizeAdminKey",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
   },
   {
     "inputs": [
@@ -336,6 +431,115 @@
       }
     ],
     "name": "authorizeKey",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "keyId",
+        "type": "address"
+      },
+      {
+        "internalType": "enum IAccountKeychain.SignatureType",
+        "name": "signatureType",
+        "type": "uint8"
+      },
+      {
+        "components": [
+          {
+            "internalType": "uint64",
+            "name": "expiry",
+            "type": "uint64"
+          },
+          {
+            "internalType": "bool",
+            "name": "enforceLimits",
+            "type": "bool"
+          },
+          {
+            "components": [
+              {
+                "internalType": "address",
+                "name": "token",
+                "type": "address"
+              },
+              {
+                "internalType": "uint256",
+                "name": "amount",
+                "type": "uint256"
+              },
+              {
+                "internalType": "uint64",
+                "name": "period",
+                "type": "uint64"
+              }
+            ],
+            "internalType": "struct IAccountKeychain.TokenLimit[]",
+            "name": "limits",
+            "type": "tuple[]"
+          },
+          {
+            "internalType": "bool",
+            "name": "allowAnyCalls",
+            "type": "bool"
+          },
+          {
+            "components": [
+              {
+                "internalType": "address",
+                "name": "target",
+                "type": "address"
+              },
+              {
+                "components": [
+                  {
+                    "internalType": "bytes4",
+                    "name": "selector",
+                    "type": "bytes4"
+                  },
+                  {
+                    "internalType": "address[]",
+                    "name": "recipients",
+                    "type": "address[]"
+                  }
+                ],
+                "internalType": "struct IAccountKeychain.SelectorRule[]",
+                "name": "selectorRules",
+                "type": "tuple[]"
+              }
+            ],
+            "internalType": "struct IAccountKeychain.CallScope[]",
+            "name": "allowedCalls",
+            "type": "tuple[]"
+          }
+        ],
+        "internalType": "struct IAccountKeychain.KeyRestrictions",
+        "name": "config",
+        "type": "tuple"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "witness",
+        "type": "bytes32"
+      }
+    ],
+    "name": "authorizeKey",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "witness",
+        "type": "bytes32"
+      }
+    ],
+    "name": "burnKeyAuthorizationWitness",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -515,6 +719,54 @@
         "internalType": "address",
         "name": "",
         "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "keyId",
+        "type": "address"
+      }
+    ],
+    "name": "isAdminKey",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "witness",
+        "type": "bytes32"
+      }
+    ],
+    "name": "isKeyAuthorizationWitnessBurned",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "burned",
+        "type": "bool"
       }
     ],
     "stateMutability": "view",
