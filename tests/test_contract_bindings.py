@@ -118,7 +118,8 @@ def test_tip20_role_query_helpers_decode_results_and_encode_selectors():
         "PAUSE_ROLE()",
         "UNPAUSE_ROLE()",
     ]
-    for call, signature in zip(mock_w3.eth.call.call_args_list, expected, strict=True):
+    assert len(mock_w3.eth.call.call_args_list) == len(expected)
+    for call, signature in zip(mock_w3.eth.call.call_args_list, expected):
         tx = call.args[0]
         assert tx["to"] == ALPHA_USD
         assert bytes.fromhex(tx["data"][2:10]) == _selector(signature)
