@@ -84,6 +84,19 @@ class TestGetRemainingLimit:
 
         assert result == 0
 
+    def test_rejects_empty_response(self):
+        """Should reject malformed RPC responses."""
+        mock_w3 = MagicMock()
+        mock_w3.eth.call.return_value = b""
+
+        with pytest.raises(ValueError, match="wrong length"):
+            AccountKeychain.get_remaining_limit(
+                mock_w3,
+                account_address="0x" + "a" * 40,
+                key_id="0x" + "b" * 40,
+                token_address="0x" + "c" * 40,
+            )
+
     def test_raises_on_empty_account(self):
         """Should raise ValueError if account_address is empty."""
         mock_w3 = MagicMock()
@@ -118,6 +131,133 @@ class TestGetRemainingLimit:
                 account_address="0x" + "a" * 40,
                 key_id="0x" + "b" * 40,
                 token_address="",
+            )
+
+
+class TestT5AccountKeychainQueries:
+    """Tests for T5 AccountKeychain query helpers."""
+
+    def test_get_remaining_limit_with_period_parses_values(self):
+        mock_w3 = MagicMock()
+        mock_w3.eth.call.return_value = (1000).to_bytes(32, "big") + (
+            1893456000
+        ).to_bytes(32, "big")
+
+        result = AccountKeychain.get_remaining_limit_with_period(
+            mock_w3,
+            account_address="0x" + "a" * 40,
+            key_id="0x" + "b" * 40,
+            token_address="0x" + "c" * 40,
+        )
+
+        assert result == {"remaining": 1000, "period_end": 1893456000}
+
+    def test_get_remaining_limit_with_period_rejects_wrong_length(self):
+        mock_w3 = MagicMock()
+        mock_w3.eth.call.return_value = b"\x00" * 32
+
+        with pytest.raises(ValueError, match="wrong length"):
+            AccountKeychain.get_remaining_limit_with_period(
+                mock_w3,
+                account_address="0x" + "a" * 40,
+                key_id="0x" + "b" * 40,
+                token_address="0x" + "c" * 40,
+            )
+
+    def test_get_remaining_limit_with_period_rejects_period_overflow(self):
+        mock_w3 = MagicMock()
+        mock_w3.eth.call.return_value = (1000).to_bytes(32, "big") + (2**64).to_bytes(
+            32, "big"
+        )
+
+        with pytest.raises(ValueError, match="uint64"):
+            AccountKeychain.get_remaining_limit_with_period(
+                mock_w3,
+                account_address="0x" + "a" * 40,
+                key_id="0x" + "b" * 40,
+                token_address="0x" + "c" * 40,
+            )
+
+    def test_get_transaction_key_parses_address(self):
+        mock_w3 = MagicMock()
+        mock_w3.eth.call.return_value = b"\x00" * 12 + bytes.fromhex("d" * 40)
+
+        result = AccountKeychain.get_transaction_key(mock_w3)
+
+        assert result.lower() == ("0x" + "d" * 40).lower()
+
+    def test_get_transaction_key_rejects_wrong_length(self):
+        mock_w3 = MagicMock()
+        mock_w3.eth.call.return_value = b"\x00" * 31
+
+        with pytest.raises(ValueError, match="wrong length"):
+            AccountKeychain.get_transaction_key(mock_w3)
+
+    def test_is_admin_key_parses_bool(self):
+        mock_w3 = MagicMock()
+        mock_w3.eth.call.return_value = (1).to_bytes(32, "big")
+
+        result = AccountKeychain.is_admin_key(
+            mock_w3,
+            account_address="0x" + "a" * 40,
+            key_id="0x" + "b" * 40,
+        )
+
+        assert result is True
+
+    def test_is_admin_key_rejects_wrong_length(self):
+        mock_w3 = MagicMock()
+        mock_w3.eth.call.return_value = b"\x00" * 31
+
+        with pytest.raises(ValueError, match="wrong length"):
+            AccountKeychain.is_admin_key(
+                mock_w3,
+                account_address="0x" + "a" * 40,
+                key_id="0x" + "b" * 40,
+            )
+
+    def test_is_admin_key_rejects_noncanonical_bool(self):
+        mock_w3 = MagicMock()
+        mock_w3.eth.call.return_value = (2).to_bytes(32, "big")
+
+        with pytest.raises(ValueError, match="ABI bool"):
+            AccountKeychain.is_admin_key(
+                mock_w3,
+                account_address="0x" + "a" * 40,
+                key_id="0x" + "b" * 40,
+            )
+
+    def test_is_key_authorization_witness_burned_parses_bool(self):
+        mock_w3 = MagicMock()
+        mock_w3.eth.call.return_value = (0).to_bytes(32, "big")
+
+        result = AccountKeychain.is_key_authorization_witness_burned(
+            mock_w3,
+            account_address="0x" + "a" * 40,
+            witness="0x" + "1" * 64,
+        )
+
+        assert result is False
+
+    def test_is_key_authorization_witness_burned_rejects_invalid_witness(self):
+        mock_w3 = MagicMock()
+
+        with pytest.raises(ValueError, match="hash32"):
+            AccountKeychain.is_key_authorization_witness_burned(
+                mock_w3,
+                account_address="0x" + "a" * 40,
+                witness="0x1234",
+            )
+
+    def test_is_key_authorization_witness_burned_rejects_noncanonical_bool(self):
+        mock_w3 = MagicMock()
+        mock_w3.eth.call.return_value = (2).to_bytes(32, "big")
+
+        with pytest.raises(ValueError, match="ABI bool"):
+            AccountKeychain.is_key_authorization_witness_burned(
+                mock_w3,
+                account_address="0x" + "a" * 40,
+                witness="0x" + "1" * 64,
             )
 
 
@@ -183,6 +323,18 @@ class TestGetKey:
         )
 
         assert info["is_revoked"] is True
+
+    def test_rejects_noncanonical_bool(self):
+        """Should reject malformed ABI bool words."""
+        mock_w3 = MagicMock()
+        mock_w3.eth.call.return_value = self._build_result(enforce_limits=2)
+
+        with pytest.raises(ValueError, match="ABI bool"):
+            AccountKeychain.get_key(
+                mock_w3,
+                account_address="0x" + "a" * 40,
+                key_id="0x" + "b" * 40,
+            )
 
     def test_parses_enforce_limits(self):
         """Should detect enforce_limits=true."""

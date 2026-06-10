@@ -37,12 +37,17 @@
   },
   {
     "inputs": [],
-    "name": "InvalidBaseToken",
+    "name": "InvalidCurrency",
     "type": "error"
   },
   {
     "inputs": [],
-    "name": "InvalidCurrency",
+    "name": "InvalidLogoURI",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "InvalidPayload",
     "type": "error"
   },
   {
@@ -77,6 +82,11 @@
   },
   {
     "inputs": [],
+    "name": "LogoURITooLong",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "NoOptedInSupply",
     "type": "error"
   },
@@ -98,6 +108,16 @@
   {
     "inputs": [],
     "name": "SupplyCapExceeded",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "Unauthorized",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "Uninitialized",
     "type": "error"
   },
   {
@@ -161,6 +181,25 @@
       }
     ],
     "name": "BurnBlocked",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "updater",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "newLogoURI",
+        "type": "string"
+      }
+    ],
+    "name": "LogoURIUpdated",
     "type": "event"
   },
   {
@@ -635,9 +674,9 @@
     "name": "getPendingRewards",
     "outputs": [
       {
-        "internalType": "uint256",
+        "internalType": "uint128",
         "name": "",
-        "type": "uint256"
+        "type": "uint128"
       }
     ],
     "stateMutability": "view",
@@ -651,6 +690,19 @@
         "internalType": "uint256",
         "name": "",
         "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "logoURI",
+    "outputs": [
+      {
+        "internalType": "string",
+        "name": "",
+        "type": "string"
       }
     ],
     "stateMutability": "view",
@@ -834,6 +886,19 @@
   {
     "inputs": [
       {
+        "internalType": "string",
+        "name": "newLogoURI",
+        "type": "string"
+      }
+    ],
+    "name": "setLogoURI",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "contract ITIP20",
         "name": "newQuoteToken",
         "type": "address"
@@ -897,35 +962,6 @@
     "type": "function"
   },
   {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "from",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "to",
-        "type": "address"
-      },
-      {
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      }
-    ],
-    "name": "systemTransferFrom",
-    "outputs": [
-      {
-        "internalType": "bool",
-        "name": "",
-        "type": "bool"
-      }
-    ],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
     "inputs": [],
     "name": "totalSupply",
     "outputs": [
@@ -959,47 +995,6 @@
         "type": "bool"
       }
     ],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "to",
-        "type": "address"
-      },
-      {
-        "internalType": "uint256",
-        "name": "refund",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "actualUsed",
-        "type": "uint256"
-      }
-    ],
-    "name": "transferFeePostTx",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "from",
-        "type": "address"
-      },
-      {
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      }
-    ],
-    "name": "transferFeePreTx",
-    "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
   },

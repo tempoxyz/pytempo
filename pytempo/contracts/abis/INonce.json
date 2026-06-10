@@ -1,6 +1,21 @@
 [
   {
     "inputs": [],
+    "name": "ExpiringNonceReplay",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "ExpiringNonceSetFull",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "InvalidExpiringNonceExpiry",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "InvalidNonceKey",
     "type": "error"
   },

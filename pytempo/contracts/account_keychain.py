@@ -19,16 +19,26 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from eth_utils import to_checksum_address
-
 from pytempo.keychain import CallScope, KeyRestrictions, SignatureType
 from pytempo.models import Call
+from pytempo.types import BytesLike, as_hash32
 
+from ._decode import decode_address, decode_bool, decode_u64, decode_uint
 from ._encode import encode_calldata
 from .abis import ACCOUNT_KEYCHAIN_ABI
 from .addresses import ACCOUNT_KEYCHAIN_ADDRESS
 
 _ABI = ACCOUNT_KEYCHAIN_ABI
+
+
+def _hash32(value: BytesLike) -> bytes:
+    return bytes(as_hash32(value))
+
+
+def _require_addresses(**values: str) -> None:
+    missing = ", ".join(name for name, value in values.items() if not value)
+    if missing:
+        raise ValueError(f"{missing} required")
 
 
 class AccountKeychain:
@@ -46,6 +56,7 @@ class AccountKeychain:
         signature_type: SignatureType,
         restrictions: KeyRestrictions,
         legacy: bool = False,
+        witness: BytesLike | None = None,
     ) -> Call:
         """Build an ``authorizeKey`` call.
 
@@ -55,8 +66,11 @@ class AccountKeychain:
             restrictions: Key restrictions (expiry, limits, call scopes).
             legacy: Use pre-T3 flat-parameter encoding. Pass ``True``
                 until T3 is activated, then remove this argument.
+            witness: Optional T5 key-authorization witness.
         """
         if legacy:
+            if witness is not None:
+                raise ValueError("legacy=True does not support witnesses")
             if restrictions.allowed_calls is not None:
                 raise ValueError("legacy=True does not support call restrictions")
             if restrictions.limits and any(
@@ -83,12 +97,29 @@ class AccountKeychain:
                 ],
             )
         else:
+            args = [key_id, int(signature_type), restrictions.to_abi_tuple()]
+            if witness is not None:
+                args.append(_hash32(witness))
             data = encode_calldata(
                 _ABI,
                 "authorizeKey",
-                [key_id, int(signature_type), restrictions.to_abi_tuple()],
+                args,
             )
 
+        return Call.create(to=ACCOUNT_KEYCHAIN_ADDRESS, data=data)
+
+    @staticmethod
+    def authorize_admin_key(
+        *,
+        key_id: str,
+        signature_type: SignatureType,
+        witness: BytesLike,
+    ) -> Call:
+        """Build an ``authorizeAdminKey(address,uint8,bytes32)`` call."""
+        _require_addresses(key_id=key_id)
+        data = encode_calldata(
+            _ABI, "authorizeAdminKey", [key_id, int(signature_type), _hash32(witness)]
+        )
         return Call.create(to=ACCOUNT_KEYCHAIN_ADDRESS, data=data)
 
     @staticmethod
@@ -114,6 +145,12 @@ class AccountKeychain:
     def revoke_key(*, key_id: str) -> Call:
         """Build a ``revokeKey(address)`` call."""
         data = encode_calldata(_ABI, "revokeKey", [key_id])
+        return Call.create(to=ACCOUNT_KEYCHAIN_ADDRESS, data=data)
+
+    @staticmethod
+    def burn_key_authorization_witness(*, witness: BytesLike) -> Call:
+        """Build a ``burnKeyAuthorizationWitness(bytes32)`` call."""
+        data = encode_calldata(_ABI, "burnKeyAuthorizationWitness", [_hash32(witness)])
         return Call.create(to=ACCOUNT_KEYCHAIN_ADDRESS, data=data)
 
     @staticmethod
@@ -172,8 +209,7 @@ class AccountKeychain:
         Raises:
             ValueError: If any address parameter is empty or result is wrong length.
         """
-        if not account_address or not key_id:
-            raise ValueError("account_address and key_id are required")
+        _require_addresses(account_address=account_address, key_id=key_id)
 
         call_data = encode_calldata(_ABI, "getKey", [account_address, key_id])
         result = bytes(w3.eth.call({"to": ACCOUNT_KEYCHAIN_ADDRESS, "data": call_data}))
@@ -187,10 +223,10 @@ class AccountKeychain:
 
         return {
             "signature_type": int.from_bytes(words[0], "big"),
-            "key_id": to_checksum_address(words[1][-20:]),
+            "key_id": decode_address(words[1], "getKey.keyId"),
             "expiry": int.from_bytes(words[2], "big"),
-            "enforce_limits": bool(int.from_bytes(words[3], "big")),
-            "is_revoked": bool(int.from_bytes(words[4], "big")),
+            "enforce_limits": decode_bool(words[3], "getKey.enforceLimits"),
+            "is_revoked": decode_bool(words[4], "getKey.isRevoked"),
         }
 
     @staticmethod
@@ -215,8 +251,11 @@ class AccountKeychain:
         Raises:
             ValueError: If any address parameter is empty.
         """
-        if not account_address or not key_id or not token_address:
-            raise ValueError("account_address, key_id, and token_address are required")
+        _require_addresses(
+            account_address=account_address,
+            key_id=key_id,
+            token_address=token_address,
+        )
 
         call_data = encode_calldata(
             _ABI,
@@ -224,4 +263,73 @@ class AccountKeychain:
             [account_address, key_id, token_address],
         )
         result = w3.eth.call({"to": ACCOUNT_KEYCHAIN_ADDRESS, "data": call_data})
-        return int.from_bytes(result, "big")
+        return decode_uint(result, "getRemainingLimit")
+
+    @staticmethod
+    def get_remaining_limit_with_period(
+        w3,
+        *,
+        account_address: str,
+        key_id: str,
+        token_address: str,
+    ) -> dict:
+        """Query remaining spending limit and current period end for an access key."""
+        _require_addresses(
+            account_address=account_address,
+            key_id=key_id,
+            token_address=token_address,
+        )
+
+        call_data = encode_calldata(
+            _ABI,
+            "getRemainingLimitWithPeriod",
+            [account_address, key_id, token_address],
+        )
+        result = bytes(w3.eth.call({"to": ACCOUNT_KEYCHAIN_ADDRESS, "data": call_data}))
+        if len(result) != 64:
+            raise ValueError(
+                "getRemainingLimitWithPeriod result wrong length, "
+                f"expected 64 bytes, got {len(result)}"
+            )
+        return {
+            "remaining": decode_uint(
+                result[:32], "getRemainingLimitWithPeriod.remaining"
+            ),
+            "period_end": decode_u64(
+                result[32:], "getRemainingLimitWithPeriod.periodEnd"
+            ),
+        }
+
+    @staticmethod
+    def get_transaction_key(w3) -> str:
+        """Query the active transaction key from the AccountKeychain precompile."""
+        call_data = encode_calldata(_ABI, "getTransactionKey", [])
+        result = w3.eth.call({"to": ACCOUNT_KEYCHAIN_ADDRESS, "data": call_data})
+        return decode_address(result, "getTransactionKey")
+
+    @staticmethod
+    def is_admin_key(w3, *, account_address: str, key_id: str) -> bool:
+        """Query whether ``key_id`` is an admin key for ``account_address``."""
+        _require_addresses(account_address=account_address, key_id=key_id)
+
+        call_data = encode_calldata(_ABI, "isAdminKey", [account_address, key_id])
+        result = w3.eth.call({"to": ACCOUNT_KEYCHAIN_ADDRESS, "data": call_data})
+        return decode_bool(result, "isAdminKey")
+
+    @staticmethod
+    def is_key_authorization_witness_burned(
+        w3,
+        *,
+        account_address: str,
+        witness: BytesLike,
+    ) -> bool:
+        """Query whether a key-authorization witness has been burned."""
+        _require_addresses(account_address=account_address)
+
+        call_data = encode_calldata(
+            _ABI,
+            "isKeyAuthorizationWitnessBurned",
+            [account_address, _hash32(witness)],
+        )
+        result = w3.eth.call({"to": ACCOUNT_KEYCHAIN_ADDRESS, "data": call_data})
+        return decode_bool(result, "isKeyAuthorizationWitnessBurned")
