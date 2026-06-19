@@ -21,7 +21,17 @@ Total signature length: 86 bytes.
 
 KeyAuthorization is used to provision access keys inline within a Tempo transaction.
 The authorization is RLP-encoded and signed by the root account.
-Format: ``[chain_id, key_type, key_id, expiry?, limits?]``
+
+The full T6 RLP payload format (trailing-canonical) is::
+
+    [chain_id, key_type, key_id, expiry?, limits?, allowed_calls?, witness?, is_admin?, account?]
+
+pytempo's inline ``KeyAuthorization`` models the subset
+``[chain_id, key_type, key_id, expiry?, limits?, witness?, is_admin?, account?]``;
+``allowed_calls`` is not supported inline (use
+:meth:`~pytempo.contracts.AccountKeychain.authorize_key` for call scopes).
+Because the wire ordering is positional, any present trailing field forces
+explicit empty-string placeholders (``0x80``) for absent earlier optionals.
 """
 
 from __future__ import annotations
@@ -37,8 +47,11 @@ from eth_utils import keccak, to_checksum_address
 from .types import (
     Address,
     BytesLike,
+    Hash32,
     Selector,
     as_address,
+    as_hash32,
+    as_optional_address,
     as_selector,
     validate_nonempty_address,
 )
@@ -111,7 +124,22 @@ class TokenLimit:
     period: int = attrs.field(default=0, validator=_validate_u64)
 
     def to_rlp(self) -> list:
+        # Wire form is [token, limit, period?] with period trailing-canonical
+        # (omitted when 0). Inline KeyAuthorization only allows period == 0,
+        # so the period field is always omitted here.
         return [bytes(self.token), self.limit]
+
+    @classmethod
+    def from_rlp(cls, item: object) -> TokenLimit:
+        """Decode a ``[token, limit, period?]`` RLP item into a TokenLimit."""
+        if not isinstance(item, list) or len(item) not in (2, 3):
+            raise ValueError(
+                f"TokenLimit RLP must be [token, limit, period?], got {item!r}"
+            )
+        token = item[0]
+        limit = int.from_bytes(item[1], "big")
+        period = int.from_bytes(item[2], "big") if len(item) == 3 else 0
+        return cls(token=token, limit=limit, period=period)
 
 
 # ---------------------------------------------------------------------------
@@ -453,11 +481,32 @@ def _convert_limits(
     return None if value is None else tuple(value)
 
 
+def _convert_optional_hash32(value: BytesLike | None) -> Hash32 | None:
+    return None if value is None else as_hash32(value)
+
+
 def _validate_optional_expiry(
     instance: object, attribute: object, value: int | None
 ) -> None:
-    if value is not None and value < 0:
-        raise ValueError(f"expiry must be >= 0, got {value}")
+    # Wire type is Option<NonZeroU64>: 0 is not a valid expiry (use None for
+    # "never expires"), and the upper bound is uint64.
+    if value is not None and not (1 <= value <= 2**64 - 1):
+        raise ValueError(
+            f"expiry must be in [1, 2**64 - 1] when set (use None for never), "
+            f"got {value}"
+        )
+
+
+def _rlp_int(raw: object) -> int:
+    if not isinstance(raw, bytes):
+        raise ValueError(f"expected RLP integer (bytes), got {type(raw).__name__}")
+    return int.from_bytes(raw, "big")
+
+
+def _require_rlp_bytes(raw: object) -> bytes:
+    if not isinstance(raw, bytes):
+        raise ValueError(f"expected RLP bytes, got {type(raw).__name__}")
+    return raw
 
 
 @attrs.define(frozen=True)
@@ -471,14 +520,20 @@ class KeyAuthorization:
         key_id: Key identifier (address derived from the public key)
         chain_id: Chain ID for replay protection (0 = valid on any chain)
         key_type: Type of key being authorized (SignatureType.SECP256K1, P256, or WEBAUTHN)
-        expiry: Unix timestamp when key expires (None = never expires)
+        expiry: Unix timestamp when key expires (None = never expires; 0 is invalid)
         limits: Token spending limits (None = unlimited, () = no spending, tuple of :class:`TokenLimit` = specific limits)
+        witness: Optional T5 key-authorization witness (None = no witness; a
+            32-byte value, including all-zero, marks the witness as present).
+        is_admin: T6 admin key flag. Admin keys can manage other keys but must
+            not carry an ``expiry`` or ``limits``.
+        account: T6 optional account binding. Required for admin-signed
+            authorizations; if set it must equal the target account.
     """
 
     key_id: Address = attrs.field(
         converter=as_address, validator=validate_nonempty_address
     )
-    chain_id: int = attrs.field(default=0, validator=attrs.validators.ge(0))
+    chain_id: int = attrs.field(default=0, validator=_validate_u64)
     key_type: SignatureType = attrs.field(
         default=SignatureType.SECP256K1, converter=SignatureType
     )
@@ -486,8 +541,21 @@ class KeyAuthorization:
     limits: tuple[TokenLimit, ...] | None = attrs.field(
         default=None, converter=_convert_limits
     )
+    witness: Hash32 | None = attrs.field(
+        default=None, converter=_convert_optional_hash32
+    )
+    is_admin: bool = attrs.field(
+        default=False, validator=attrs.validators.instance_of(bool)
+    )
+    account: Address | None = attrs.field(default=None, converter=as_optional_address)
 
     def __attrs_post_init__(self) -> None:
+        if self.is_admin:
+            if self.expiry is not None:
+                raise ValueError("admin KeyAuthorization must not set expiry")
+            if self.limits is not None:
+                raise ValueError("admin KeyAuthorization must not set limits")
+
         if self.limits:
             for lim in self.limits:
                 if lim.period != 0:
@@ -498,20 +566,123 @@ class KeyAuthorization:
                     )
 
     def as_rlp_payload(self) -> list:
-        """Return the RLP-encodable list representation."""
-        # Build list with required fields
+        """Return the RLP-encodable list representation.
+
+        Wire order (trailing-canonical)::
+
+            [chain_id, key_type, key_id, expiry?, limits?, allowed_calls?,
+             witness?, is_admin?, account?]
+
+        Trailing absent optionals are omitted; absent optionals that precede a
+        present later field are emitted as explicit empty strings (``0x80``).
+        ``allowed_calls`` is unsupported inline and is always absent.
+        """
         items: list = [self.chain_id, int(self.key_type), bytes(self.key_id)]
 
-        # Add optional trailing fields
-        # expiry=0 is treated the same as expiry=None (never expires)
-        has_expiry = self.expiry is not None and self.expiry != 0
-        if has_expiry or self.limits is not None:
-            items.append(self.expiry if has_expiry else b"")
+        optionals: list[object | None] = [
+            self.expiry,
+            [limit.to_rlp() for limit in self.limits]
+            if self.limits is not None
+            else None,
+            None,  # allowed_calls (unsupported inline)
+            bytes(self.witness) if self.witness is not None else None,
+            1 if self.is_admin else None,
+            bytes(self.account) if self.account is not None else None,
+        ]
 
-        if self.limits is not None:
-            items.append([limit.to_rlp() for limit in self.limits])
-
+        last = max(
+            (i for i, value in enumerate(optionals) if value is not None),
+            default=-1,
+        )
+        items.extend(
+            value if value is not None else b"" for value in optionals[: last + 1]
+        )
         return items
+
+    @classmethod
+    def from_rlp(cls, items: object) -> KeyAuthorization:
+        """Decode an RLP-decoded payload list into a KeyAuthorization.
+
+        Rejects payloads carrying ``allowed_calls`` (unsupported inline) and
+        invalid admin markers.
+        """
+        if not isinstance(items, list):
+            raise ValueError("KeyAuthorization RLP payload must be a list")
+        if not (3 <= len(items) <= 9):
+            raise ValueError(
+                f"KeyAuthorization must have between 3 and 9 fields, got {len(items)}"
+            )
+
+        chain_id = _rlp_int(items[0])
+        key_type = SignatureType(_rlp_int(items[1]))
+        key_id = _require_rlp_bytes(items[2])
+
+        tail = items[3:]
+
+        def slot(i: int) -> object:
+            return tail[i] if i < len(tail) else b""
+
+        expiry_raw = slot(0)
+        limits_raw = slot(1)
+        allowed_calls_raw = slot(2)
+        witness_raw = slot(3)
+        is_admin_raw = slot(4)
+        account_raw = slot(5)
+
+        if allowed_calls_raw != b"":
+            raise ValueError(
+                "KeyAuthorization with allowed_calls is not supported by pytempo; "
+                "use AccountKeychain.authorize_key() instead"
+            )
+
+        expiry = None if expiry_raw == b"" else _rlp_int(expiry_raw)
+
+        if limits_raw == b"":
+            limits = None
+        elif isinstance(limits_raw, list):
+            limits = tuple(TokenLimit.from_rlp(item) for item in limits_raw)
+        else:
+            raise ValueError("limits must be an RLP list or empty string")
+
+        witness = (
+            None if witness_raw == b"" else as_hash32(_require_rlp_bytes(witness_raw))
+        )
+
+        if is_admin_raw == b"":
+            is_admin = False
+        else:
+            marker = _rlp_int(is_admin_raw)
+            if marker != 1:
+                raise ValueError(f"invalid admin key authorization marker: {marker}")
+            is_admin = True
+
+        account = None if account_raw == b"" else _require_rlp_bytes(account_raw)
+
+        auth = cls(
+            key_id=key_id,
+            chain_id=chain_id,
+            key_type=key_type,
+            expiry=expiry,
+            limits=limits,
+            witness=witness,
+            is_admin=is_admin,
+            account=account,
+        )
+
+        # Enforce trailing-canonical RLP (mirrors Rust #[rlp(trailing(canonical))]).
+        # Rejects trailing empty placeholders, explicit zero token-limit periods,
+        # leading-zero integers, and any other decode/encode asymmetry.
+        if rlp.encode(items) != auth.rlp_encode():
+            raise ValueError("non-canonical KeyAuthorization RLP")
+
+        return auth
+
+    @classmethod
+    def decode(cls, raw: BytesLike) -> KeyAuthorization:
+        """Decode RLP-encoded bytes into a KeyAuthorization."""
+        from .types import as_bytes as _as_bytes
+
+        return cls.from_rlp(rlp.decode(_as_bytes(raw)))
 
     def rlp_encode(self) -> bytes:
         """RLP encode the key authorization."""
@@ -580,6 +751,25 @@ class SignedKeyAuthorization:
         """RLP encode the signed key authorization."""
         return rlp.encode(self.as_rlp_payload())
 
+    @classmethod
+    def decode(cls, raw: BytesLike) -> SignedKeyAuthorization:
+        """Decode RLP-encoded bytes into a SignedKeyAuthorization.
+
+        Expects ``[authorization, signature]`` where ``signature`` is a 65-byte
+        secp256k1 signature.
+        """
+        from .models import Signature
+        from .types import as_bytes as _as_bytes
+
+        items = rlp.decode(_as_bytes(raw))
+        if not isinstance(items, list) or len(items) != 2:
+            raise ValueError(
+                "SignedKeyAuthorization RLP must be [authorization, signature]"
+            )
+        authorization = KeyAuthorization.from_rlp(items[0])
+        signature = Signature.from_bytes(_require_rlp_bytes(items[1]))
+        return cls(authorization=authorization, signature=signature)
+
     def to_json(self) -> dict:
         """Convert to JSON format for eth_estimateGas and other RPC calls.
 
@@ -609,6 +799,15 @@ class SignedKeyAuthorization:
                 }
                 for limit in self.authorization.limits
             ]
+
+        if self.authorization.witness is not None:
+            result["witness"] = "0x" + bytes(self.authorization.witness).hex()
+
+        if self.authorization.is_admin:
+            result["isAdmin"] = True
+
+        if self.authorization.account is not None:
+            result["account"] = to_checksum_address(bytes(self.authorization.account))
 
         return result
 
