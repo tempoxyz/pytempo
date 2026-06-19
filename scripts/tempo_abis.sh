@@ -18,7 +18,7 @@ case "${1:-}" in
 esac
 
 REPO="tempoxyz/tempo-std"
-INTERFACES=(ITIP20 ITIP20RolesAuth IAccountKeychain IStablecoinDEX IFeeManager IFeeAMM INonce)
+INTERFACES=(ITIP20 ITIP20RolesAuth IAccountKeychain IStablecoinDEX IFeeManager IFeeAMM INonce ITIP403Registry IReceivePolicyGuard ISignatureVerifier)
 ABI_DIR="$(cd "$(dirname "$0")/.." && pwd)/pytempo/contracts/abis"
 
 WORK_DIR=$(mktemp -d)

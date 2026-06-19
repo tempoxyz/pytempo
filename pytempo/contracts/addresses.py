@@ -26,6 +26,14 @@ VALIDATOR_CONFIG_ADDRESS = to_checksum_address(
 ACCOUNT_KEYCHAIN_ADDRESS = to_checksum_address(
     "0xaAAAaaAA00000000000000000000000000000000"
 )
+# T6 (TIP-1020) SignatureVerifier precompile
+SIGNATURE_VERIFIER_ADDRESS = to_checksum_address(
+    "0x5165300000000000000000000000000000000000"
+)
+# T6 (TIP-1028) ReceivePolicyGuard precompile — holds blocked inbound transfers
+RECEIVE_POLICY_GUARD_ADDRESS = to_checksum_address(
+    "0xB10C000000000000000000000000000000000000"
+)
 
 # Tokens (from StdTokens.sol)
 PATH_USD = to_checksum_address("0x20C0000000000000000000000000000000000000")
