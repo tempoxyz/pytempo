@@ -22,7 +22,7 @@ REPO="tempoxyz/tempo-std"
 # reproducible and ABIs can't silently drift with tempo-std's default branch.
 # Bump this (and re-run --sync) to adopt newer interfaces. Override per-run with
 # TEMPO_STD_REF=<sha|tag|branch>.
-REF="${TEMPO_STD_REF:-b0cc603b14bed2e26e584cb2ff2f19227f2e25d4}"
+REF="${TEMPO_STD_REF:-84baf1077e1d704d4197845d48cf2b9e7148a6df}"
 INTERFACES=(ITIP20 ITIP20RolesAuth IAccountKeychain IStablecoinDEX IFeeManager IFeeAMM INonce ITIP403Registry IReceivePolicyGuard ISignatureVerifier)
 ABI_DIR="$(cd "$(dirname "$0")/.." && pwd)/pytempo/contracts/abis"
 
