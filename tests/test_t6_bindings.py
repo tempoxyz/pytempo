@@ -234,6 +234,42 @@ class TestReadCallTargets:
         assert mock_w3.eth.call.call_args[0][0]["to"] == SIGNATURE_VERIFIER_ADDRESS
 
 
+class TestAbiOutputLayout:
+    """Guard against upstream ABI *output* drift.
+
+    ``tip403.py`` decodes ``receivePolicy`` / ``validateReceivePolicy`` outputs
+    by manual word-slicing, so the vendored ABI's output definitions are never
+    exercised by the call builders. These tests assert the (name, type) output
+    layout so a tempo-std change to either signature fails loudly here.
+    """
+
+    @staticmethod
+    def _outputs(abi: list, name: str) -> list:
+        entries = [e for e in abi if e.get("name") == name]
+        assert len(entries) == 1, f"expected exactly one {name} entry"
+        return [(o.get("name"), o["type"]) for o in entries[0]["outputs"]]
+
+    def test_receive_policy_output_layout(self):
+        from pytempo.contracts.abis import TIP403_REGISTRY_ABI
+
+        assert self._outputs(TIP403_REGISTRY_ABI, "receivePolicy") == [
+            ("hasReceivePolicy", "bool"),
+            ("senderPolicyId", "uint64"),
+            ("senderPolicyType", "uint8"),
+            ("tokenFilterId", "uint64"),
+            ("tokenFilterType", "uint8"),
+            ("recoveryAuthority", "address"),
+        ]
+
+    def test_validate_receive_policy_output_layout(self):
+        from pytempo.contracts.abis import TIP403_REGISTRY_ABI
+
+        assert self._outputs(TIP403_REGISTRY_ABI, "validateReceivePolicy") == [
+            ("authorized", "bool"),
+            ("blockedReason", "uint8"),
+        ]
+
+
 def test_bindings_import_smoke():
     from pytempo.contracts import (
         InboundKind,

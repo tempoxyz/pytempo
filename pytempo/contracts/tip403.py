@@ -12,10 +12,16 @@ back with :meth:`TIP403Registry.receive_policy` /
     from pytempo.contracts import TIP403Registry
 
     call = TIP403Registry.set_receive_policy(
-        sender_policy_id=0,        # 0 = no sender restriction
+        sender_policy_id=1,        # built-in 1 = allow all senders
         token_filter_id=7,         # a TIP-403 policy id of allowed tokens
         recovery_authority="0xRecovery...",
     )
+
+Built-in policy ids ``0`` and ``1`` have fixed meanings for both
+``sender_policy_id`` and ``token_filter_id``: ``0`` rejects everything and
+``1`` allows everything. To functionally disable filtering once a receive
+policy exists, set both ids to ``1``. (If no receive policy has ever been set
+the account accepts all inbound transfers/mints regardless.)
 """
 
 from __future__ import annotations
@@ -67,11 +73,13 @@ class TIP403Registry:
         """Build a ``setReceivePolicy(uint64,uint64,address)`` call.
 
         Args:
-            sender_policy_id: TIP-403 policy id restricting allowed senders
-                (``0`` = no sender restriction).
-            token_filter_id: TIP-403 policy id restricting allowed tokens
-                (``0`` = no token restriction).
-            recovery_authority: Address allowed to recover held funds.
+            sender_policy_id: TIP-403 policy id restricting allowed senders.
+                Built-in ``0`` = reject all, ``1`` = allow all.
+            token_filter_id: TIP-403 policy id restricting allowed tokens.
+                Built-in ``0`` = reject all, ``1`` = allow all.
+            recovery_authority: Who may claim blocked funds. ``address(0)`` =
+                the transfer originator; the receiver's own address = receiver
+                recovery; any other nonzero address names that claimer.
         """
         data = encode_calldata(
             _ABI,
