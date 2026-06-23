@@ -1,0 +1,650 @@
+[
+  {
+    "inputs": [],
+    "name": "IncompatiblePolicyType",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "InvalidPolicyType",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "InvalidReceivePolicyType",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "InvalidRecoveryAuthority",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "PolicyNotFound",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "PolicyNotSimple",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "Unauthorized",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "VirtualAddressNotAllowed",
+    "type": "error"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint64",
+        "name": "policyId",
+        "type": "uint64"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "updater",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "bool",
+        "name": "restricted",
+        "type": "bool"
+      }
+    ],
+    "name": "BlacklistUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint64",
+        "name": "policyId",
+        "type": "uint64"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "creator",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint64",
+        "name": "senderPolicyId",
+        "type": "uint64"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint64",
+        "name": "recipientPolicyId",
+        "type": "uint64"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint64",
+        "name": "mintRecipientPolicyId",
+        "type": "uint64"
+      }
+    ],
+    "name": "CompoundPolicyCreated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint64",
+        "name": "policyId",
+        "type": "uint64"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "updater",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "admin",
+        "type": "address"
+      }
+    ],
+    "name": "PolicyAdminUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint64",
+        "name": "policyId",
+        "type": "uint64"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "updater",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "enum ITIP403Registry.PolicyType",
+        "name": "policyType",
+        "type": "uint8"
+      }
+    ],
+    "name": "PolicyCreated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint64",
+        "name": "senderPolicyId",
+        "type": "uint64"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint64",
+        "name": "tokenFilterId",
+        "type": "uint64"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "recoveryAuthority",
+        "type": "address"
+      }
+    ],
+    "name": "ReceivePolicyUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint64",
+        "name": "policyId",
+        "type": "uint64"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "updater",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "bool",
+        "name": "allowed",
+        "type": "bool"
+      }
+    ],
+    "name": "WhitelistUpdated",
+    "type": "event"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint64",
+        "name": "policyId",
+        "type": "uint64"
+      }
+    ],
+    "name": "compoundPolicyData",
+    "outputs": [
+      {
+        "internalType": "uint64",
+        "name": "senderPolicyId",
+        "type": "uint64"
+      },
+      {
+        "internalType": "uint64",
+        "name": "recipientPolicyId",
+        "type": "uint64"
+      },
+      {
+        "internalType": "uint64",
+        "name": "mintRecipientPolicyId",
+        "type": "uint64"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint64",
+        "name": "senderPolicyId",
+        "type": "uint64"
+      },
+      {
+        "internalType": "uint64",
+        "name": "recipientPolicyId",
+        "type": "uint64"
+      },
+      {
+        "internalType": "uint64",
+        "name": "mintRecipientPolicyId",
+        "type": "uint64"
+      }
+    ],
+    "name": "createCompoundPolicy",
+    "outputs": [
+      {
+        "internalType": "uint64",
+        "name": "newPolicyId",
+        "type": "uint64"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "admin",
+        "type": "address"
+      },
+      {
+        "internalType": "enum ITIP403Registry.PolicyType",
+        "name": "policyType",
+        "type": "uint8"
+      }
+    ],
+    "name": "createPolicy",
+    "outputs": [
+      {
+        "internalType": "uint64",
+        "name": "newPolicyId",
+        "type": "uint64"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "admin",
+        "type": "address"
+      },
+      {
+        "internalType": "enum ITIP403Registry.PolicyType",
+        "name": "policyType",
+        "type": "uint8"
+      },
+      {
+        "internalType": "address[]",
+        "name": "accounts",
+        "type": "address[]"
+      }
+    ],
+    "name": "createPolicyWithAccounts",
+    "outputs": [
+      {
+        "internalType": "uint64",
+        "name": "newPolicyId",
+        "type": "uint64"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint64",
+        "name": "policyId",
+        "type": "uint64"
+      },
+      {
+        "internalType": "address",
+        "name": "user",
+        "type": "address"
+      }
+    ],
+    "name": "isAuthorized",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint64",
+        "name": "policyId",
+        "type": "uint64"
+      },
+      {
+        "internalType": "address",
+        "name": "user",
+        "type": "address"
+      }
+    ],
+    "name": "isAuthorizedMintRecipient",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint64",
+        "name": "policyId",
+        "type": "uint64"
+      },
+      {
+        "internalType": "address",
+        "name": "user",
+        "type": "address"
+      }
+    ],
+    "name": "isAuthorizedRecipient",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint64",
+        "name": "policyId",
+        "type": "uint64"
+      },
+      {
+        "internalType": "address",
+        "name": "user",
+        "type": "address"
+      }
+    ],
+    "name": "isAuthorizedSender",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint64",
+        "name": "policyId",
+        "type": "uint64"
+      },
+      {
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      },
+      {
+        "internalType": "bool",
+        "name": "restricted",
+        "type": "bool"
+      }
+    ],
+    "name": "modifyPolicyBlacklist",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint64",
+        "name": "policyId",
+        "type": "uint64"
+      },
+      {
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      },
+      {
+        "internalType": "bool",
+        "name": "allowed",
+        "type": "bool"
+      }
+    ],
+    "name": "modifyPolicyWhitelist",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint64",
+        "name": "policyId",
+        "type": "uint64"
+      }
+    ],
+    "name": "policyData",
+    "outputs": [
+      {
+        "internalType": "enum ITIP403Registry.PolicyType",
+        "name": "policyType",
+        "type": "uint8"
+      },
+      {
+        "internalType": "address",
+        "name": "admin",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint64",
+        "name": "policyId",
+        "type": "uint64"
+      }
+    ],
+    "name": "policyExists",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "policyIdCounter",
+    "outputs": [
+      {
+        "internalType": "uint64",
+        "name": "",
+        "type": "uint64"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      }
+    ],
+    "name": "receivePolicy",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "hasReceivePolicy",
+        "type": "bool"
+      },
+      {
+        "internalType": "uint64",
+        "name": "senderPolicyId",
+        "type": "uint64"
+      },
+      {
+        "internalType": "enum ITIP403Registry.PolicyType",
+        "name": "senderPolicyType",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint64",
+        "name": "tokenFilterId",
+        "type": "uint64"
+      },
+      {
+        "internalType": "enum ITIP403Registry.PolicyType",
+        "name": "tokenFilterType",
+        "type": "uint8"
+      },
+      {
+        "internalType": "address",
+        "name": "recoveryAuthority",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint64",
+        "name": "policyId",
+        "type": "uint64"
+      },
+      {
+        "internalType": "address",
+        "name": "admin",
+        "type": "address"
+      }
+    ],
+    "name": "setPolicyAdmin",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint64",
+        "name": "senderPolicyId",
+        "type": "uint64"
+      },
+      {
+        "internalType": "uint64",
+        "name": "tokenFilterId",
+        "type": "uint64"
+      },
+      {
+        "internalType": "address",
+        "name": "recoveryAuthority",
+        "type": "address"
+      }
+    ],
+    "name": "setReceivePolicy",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "token",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "sender",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "receiver",
+        "type": "address"
+      }
+    ],
+    "name": "validateReceivePolicy",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "authorized",
+        "type": "bool"
+      },
+      {
+        "internalType": "enum ITIP403Registry.BlockedReason",
+        "name": "blockedReason",
+        "type": "uint8"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  }
+]

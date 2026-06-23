@@ -18,15 +18,20 @@ case "${1:-}" in
 esac
 
 REPO="tempoxyz/tempo-std"
-INTERFACES=(ITIP20 ITIP20RolesAuth IAccountKeychain IStablecoinDEX IFeeManager IFeeAMM INonce)
+# Pin the upstream commit/tag the vendored ABIs were generated from so syncs are
+# reproducible and ABIs can't silently drift with tempo-std's default branch.
+# Bump this (and re-run --sync) to adopt newer interfaces. Override per-run with
+# TEMPO_STD_REF=<sha|tag|branch>.
+REF="${TEMPO_STD_REF:-b0cc603b14bed2e26e584cb2ff2f19227f2e25d4}"
+INTERFACES=(ITIP20 ITIP20RolesAuth IAccountKeychain IStablecoinDEX IFeeManager IFeeAMM INonce ITIP403Registry IReceivePolicyGuard ISignatureVerifier)
 ABI_DIR="$(cd "$(dirname "$0")/.." && pwd)/pytempo/contracts/abis"
 
 WORK_DIR=$(mktemp -d)
 trap 'rm -rf "$WORK_DIR"' EXIT
 
-echo "==> Downloading interfaces from $REPO"
+echo "==> Downloading interfaces from $REPO @ $REF"
 for iface in "${INTERFACES[@]}"; do
-    gh api "repos/${REPO}/contents/src/interfaces/${iface}.sol" --jq '.content' \
+    gh api "repos/${REPO}/contents/src/interfaces/${iface}.sol?ref=${REF}" --jq '.content' \
         | base64 -d > "${WORK_DIR}/${iface}.sol"
 done
 
