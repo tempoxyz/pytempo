@@ -866,6 +866,209 @@ class TestSignedKeyAuthorization:
             signed.authorization = None  # type: ignore[misc]
 
 
+class TestKeyAuthorizationT6:
+    """T6 (TIP-1049) is_admin / account / witness RLP encoding and decoding."""
+
+    KEY_ID = "0x" + "bb" * 20
+    ACCOUNT = "0x" + "cc" * 20
+
+    def _payload(self, **kwargs):
+        return KeyAuthorization(
+            key_id=self.KEY_ID, chain_id=1, **kwargs
+        ).as_rlp_payload()
+
+    def test_minimal_unchanged(self):
+        """Non-admin, no optionals -> 3 fields (back-compat)."""
+        assert len(self._payload()) == 3
+
+    def test_admin_payload_has_four_placeholders_then_marker(self):
+        """admin=True -> [.., b'', b'', b'', b'', 1] (expiry/limits/calls/witness)."""
+        payload = self._payload(is_admin=True)
+        # 3 required + 4 placeholders + marker
+        assert len(payload) == 8
+        assert payload[3:7] == [b"", b"", b"", b""]
+        assert payload[7] == 1
+
+    def test_admin_with_account(self):
+        payload = self._payload(is_admin=True, account=self.ACCOUNT)
+        assert len(payload) == 9
+        assert payload[7] == 1
+        assert payload[8] == bytes.fromhex("cc" * 20)
+
+    def test_account_only_inserts_admin_placeholder(self):
+        """account set, is_admin False -> b'' placeholder before account."""
+        payload = self._payload(account=self.ACCOUNT)
+        assert len(payload) == 9
+        assert payload[3:8] == [b"", b"", b"", b"", b""]
+        assert payload[8] == bytes.fromhex("cc" * 20)
+
+    def test_witness_present_with_placeholders(self):
+        witness = "0x" + "11" * 32
+        payload = self._payload(witness=witness)
+        # 3 required + expiry b"" + limits b"" + allowed_calls b"" + witness
+        assert len(payload) == 7
+        assert payload[3:6] == [b"", b"", b""]
+        assert payload[6] == bytes.fromhex("11" * 32)
+
+    def test_admin_marker_is_int_one_not_bool(self):
+        payload = self._payload(is_admin=True)
+        assert payload[7] == 1
+        assert type(payload[7]) is int
+
+    def test_exact_hex_admin(self):
+        """Hand-computed canonical RLP for an admin authorization."""
+        auth = KeyAuthorization(
+            key_id=self.KEY_ID, chain_id=1, key_type=0, is_admin=True
+        )
+        expected = "dc018094" + "bb" * 20 + "80808080" + "01"
+        assert auth.rlp_encode().hex() == expected
+
+    # -- validation ---------------------------------------------------------
+
+    def test_admin_rejects_expiry(self):
+        with pytest.raises(ValueError, match="admin.*expiry"):
+            KeyAuthorization(key_id=self.KEY_ID, is_admin=True, expiry=123)
+
+    def test_admin_rejects_limits(self):
+        with pytest.raises(ValueError, match="admin.*limits"):
+            KeyAuthorization(
+                key_id=self.KEY_ID,
+                is_admin=True,
+                limits=[TokenLimit(token="0x" + "cc" * 20, limit=1)],
+            )
+
+    def test_admin_rejects_empty_limits(self):
+        with pytest.raises(ValueError, match="admin.*limits"):
+            KeyAuthorization(key_id=self.KEY_ID, is_admin=True, limits=())
+
+    def test_rejects_expiry_zero(self):
+        with pytest.raises(ValueError, match=r"expiry must be in"):
+            KeyAuthorization(key_id=self.KEY_ID, expiry=0)
+
+    def test_rejects_expiry_over_u64(self):
+        with pytest.raises(ValueError, match=r"expiry must be in"):
+            KeyAuthorization(key_id=self.KEY_ID, expiry=2**64)
+
+    def test_rejects_chain_id_over_u64(self):
+        with pytest.raises(ValueError):
+            KeyAuthorization(key_id=self.KEY_ID, chain_id=2**64)
+
+    # -- round-trip decode --------------------------------------------------
+
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            {},
+            {"expiry": 1893456000},
+            {"limits": ()},  # no-spending: explicit empty list
+            {"limits": (TokenLimit(token="0x" + "cc" * 20, limit=1000),)},
+            {"witness": "0x" + "11" * 32},
+            {"witness": "0x" + "00" * 32},  # present zero witness != absent
+            {"is_admin": True},
+            {"is_admin": True, "account": ACCOUNT},
+            {"account": ACCOUNT},
+            {"expiry": 42, "account": ACCOUNT},
+        ],
+    )
+    def test_round_trip(self, kwargs):
+        auth = KeyAuthorization(key_id=self.KEY_ID, chain_id=7, **kwargs)
+        decoded = KeyAuthorization.decode(auth.rlp_encode())
+        assert decoded == auth
+        # canonical re-encode is byte-identical
+        assert decoded.rlp_encode() == auth.rlp_encode()
+
+    def test_signed_round_trip(self):
+        auth = KeyAuthorization(
+            key_id=self.KEY_ID, chain_id=7, is_admin=True, account=self.ACCOUNT
+        )
+        signed = auth.sign("0x" + "a" * 64)
+        decoded = SignedKeyAuthorization.decode(signed.rlp_encode())
+        assert decoded.authorization == auth
+        assert decoded.signature == signed.signature
+
+    def test_signed_decode_rejects_noncanonical_inner(self):
+        """Signed decode delegates inner canonicality to KeyAuthorization."""
+        import rlp
+
+        from pytempo import Signature
+
+        sig = (
+            KeyAuthorization(key_id=self.KEY_ID, chain_id=7)
+            .sign("0x" + "a" * 64)
+            .signature
+        )
+        # inner auth carries a trailing empty expiry placeholder (non-canonical)
+        bad = rlp.encode(
+            [[7, 0, bytes.fromhex("bb" * 20), b""], Signature.to_bytes(sig)]
+        )
+        with pytest.raises(ValueError, match="non-canonical"):
+            SignedKeyAuthorization.decode(bad)
+
+    def test_decode_rejects_bad_admin_marker(self):
+        # payload with is_admin marker = 2 (invalid)
+        import rlp
+
+        bad = rlp.encode([7, 0, bytes.fromhex("bb" * 20), b"", b"", b"", b"", 2])
+        with pytest.raises(ValueError, match="invalid admin"):
+            KeyAuthorization.decode(bad)
+
+    def test_decode_rejects_allowed_calls(self):
+        import rlp
+
+        # allowed_calls slot carries a non-empty value
+        bad = rlp.encode([7, 0, bytes.fromhex("bb" * 20), b"", b"", [b"x"], b""])
+        with pytest.raises(ValueError, match="allowed_calls"):
+            KeyAuthorization.decode(bad)
+
+    @pytest.mark.parametrize(
+        "items",
+        [
+            # trailing empty expiry placeholder
+            [7, 0, bytes.fromhex("bb" * 20), b""],
+            # trailing allowed_calls placeholder after empty limits
+            [7, 0, bytes.fromhex("bb" * 20), b"", [], b""],
+            # trailing false admin marker placeholder, no account
+            [7, 0, bytes.fromhex("bb" * 20), b"", b"", b"", b"", b""],
+            # leading-zero admin marker (non-canonical int)
+            [7, 0, bytes.fromhex("bb" * 20), b"", b"", b"", b"", b"\x00\x01"],
+            # leading-zero chain_id
+            [b"\x00\x07", 0, bytes.fromhex("bb" * 20)],
+            # leading-zero expiry
+            [7, 0, bytes.fromhex("bb" * 20), b"\x00\x01"],
+            # explicit zero token-limit period
+            [7, 0, bytes.fromhex("bb" * 20), b"", [[bytes.fromhex("cc" * 20), 1, b""]]],
+        ],
+    )
+    def test_decode_rejects_noncanonical(self, items):
+        import rlp
+
+        with pytest.raises(ValueError):
+            KeyAuthorization.decode(rlp.encode(items))
+
+    # -- to_json ------------------------------------------------------------
+
+    def test_to_json_admin_and_account(self):
+        auth = KeyAuthorization(
+            key_id=self.KEY_ID, chain_id=7, is_admin=True, account=self.ACCOUNT
+        )
+        j = auth.sign("0x" + "a" * 64).to_json()
+        assert j["isAdmin"] is True
+        assert j["account"].lower() == self.ACCOUNT.lower()
+
+    def test_to_json_omits_admin_when_false(self):
+        auth = KeyAuthorization(key_id=self.KEY_ID, chain_id=7)
+        j = auth.sign("0x" + "a" * 64).to_json()
+        assert "isAdmin" not in j
+        assert "account" not in j
+
+    def test_to_json_includes_witness(self):
+        auth = KeyAuthorization(
+            key_id=self.KEY_ID, chain_id=7, witness="0x" + "11" * 32
+        )
+        j = auth.sign("0x" + "a" * 64).to_json()
+        assert j["witness"] == "0x" + "11" * 32
+
+
 class TestSignTxWorkflow:
     """Tests for the full sign → encode workflow."""
 
