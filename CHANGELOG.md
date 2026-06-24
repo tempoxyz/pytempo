@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.6.0 (2026-06-24)
+
+### Minor Changes
+
+- Add T5 hardfork contract bindings, including refreshed ABIs, AccountKeychain helpers, TIP20 role/admin/reward controls, and stricter ABI response decoding. (by @stevencartavia, [#62](https://github.com/tempoxyz/pytempo/pull/62))
+- Add T6 contract bindings: TIP-1028 receive policies (`TIP403Registry`
+- receive-policy helpers and `ReceivePolicyGuard`) and the TIP-1020
+- `SignatureVerifier` precompile, along with their precompile addresses and
+- refreshed ABIs. (by @stevencartavia, [#62](https://github.com/tempoxyz/pytempo/pull/62))
+- Support the T6 (TIP-1049) `KeyAuthorization` wire format: encode and decode the
+- new `is_admin` and `account` fields (plus the trailing `witness` field) using the
+- trailing-canonical RLP layout. Adds admin-key validation, canonical-RLP decoding
+- (`KeyAuthorization.decode` / `SignedKeyAuthorization.decode`), and `to_json`
+- support. `expiry=0` is now rejected — use `None` for "never expires". (by @stevencartavia, [#62](https://github.com/tempoxyz/pytempo/pull/62))
+- Expose the T6 (TIP-1049) stateful keychain signature checks on the
+- `SignatureVerifier` precompile binding: `verify_keychain(account, hash, signature)`
+- and `verify_keychain_admin(account, hash, signature)`. Bumped the vendored
+- `tempo-std` ABI ref to pick up the `verifyKeychain` / `verifyKeychainAdmin`
+- additions to `ISignatureVerifier`. (by @stevencartavia, [#62](https://github.com/tempoxyz/pytempo/pull/62))
+
 ## 0.5.1 (2026-04-24)
 
 ### Patch Changes
