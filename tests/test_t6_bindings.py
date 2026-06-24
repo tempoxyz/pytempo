@@ -141,6 +141,42 @@ class TestSignatureVerifier:
                 MagicMock(), signer="", hash="0x" + "11" * 32, signature=b"\x00" * 65
             )
 
+    def test_verify_keychain(self):
+        mock_w3 = MagicMock()
+        mock_w3.eth.call.return_value = (1).to_bytes(32, "big")
+        ok = SignatureVerifier.verify_keychain(
+            mock_w3, account=ADDR, hash="0x" + "11" * 32, signature=b"\x00" * 65
+        )
+        assert ok is True
+        sent = mock_w3.eth.call.call_args[0][0]
+        assert bytes.fromhex(sent["data"][2:10]) == _selector(
+            "verifyKeychain(address,bytes32,bytes)"
+        )
+
+    def test_verify_keychain_admin(self):
+        mock_w3 = MagicMock()
+        mock_w3.eth.call.return_value = (0).to_bytes(32, "big")
+        ok = SignatureVerifier.verify_keychain_admin(
+            mock_w3, account=ADDR, hash="0x" + "11" * 32, signature=b"\x00" * 65
+        )
+        assert ok is False
+        sent = mock_w3.eth.call.call_args[0][0]
+        assert bytes.fromhex(sent["data"][2:10]) == _selector(
+            "verifyKeychainAdmin(address,bytes32,bytes)"
+        )
+
+    def test_verify_keychain_requires_account(self):
+        with pytest.raises(ValueError, match="account"):
+            SignatureVerifier.verify_keychain(
+                MagicMock(), account="", hash="0x" + "11" * 32, signature=b"\x00" * 65
+            )
+
+    def test_verify_keychain_admin_requires_account(self):
+        with pytest.raises(ValueError, match="account"):
+            SignatureVerifier.verify_keychain_admin(
+                MagicMock(), account="", hash="0x" + "11" * 32, signature=b"\x00" * 65
+            )
+
 
 def test_addresses():
     assert TIP403_REGISTRY_ADDRESS.lower().startswith("0x403c")
