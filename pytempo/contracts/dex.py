@@ -11,6 +11,7 @@ Returns :class:`~pytempo.Call` objects ready to use in a
 
 from pytempo.models import Call
 
+from ._decode import decode_u64
 from ._encode import encode_calldata
 from .abis import STABLECOIN_DEX_ABI
 from .addresses import STABLECOIN_DEX_ADDRESS
@@ -102,3 +103,28 @@ class StablecoinDEX:
         """Build a ``createPair(address)`` call."""
         data = encode_calldata(_ABI, "createPair", [base])
         return Call.create(to=STABLECOIN_DEX_ADDRESS, data=data)
+
+    @staticmethod
+    def storage_credits(w3, *, user: str) -> int:
+        """Query the reusable order-storage credits owned by ``user`` (TIP-1064).
+
+        A maker earns one credit for each of their own order-record storage
+        slots that is freed, and can apply it to offset the cost of creating
+        storage for a later order.
+
+        Args:
+            w3: Web3 instance connected to a Tempo RPC.
+            user: The user whose DEX storage-credit balance is queried.
+
+        Returns:
+            The number of storage credits available to ``user`` (saturates at
+            ``uint64`` max).
+
+        Raises:
+            ValueError: If ``user`` is empty or the result is malformed.
+        """
+        if not user:
+            raise ValueError("user required")
+        call_data = encode_calldata(_ABI, "storageCredits", [user])
+        result = w3.eth.call({"to": STABLECOIN_DEX_ADDRESS, "data": call_data})
+        return decode_u64(result, "storageCredits")
