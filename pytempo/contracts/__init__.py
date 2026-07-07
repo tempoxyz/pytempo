@@ -33,6 +33,7 @@ from .abis import (
     RECEIVE_POLICY_GUARD_ABI,
     SIGNATURE_VERIFIER_ABI,
     STABLECOIN_DEX_ABI,
+    STORAGE_CREDITS_ABI,
     TIP20_ABI,
     TIP20_ROLES_AUTH_ABI,
     TIP403_REGISTRY_ABI,
@@ -48,6 +49,7 @@ from .addresses import (
     RECEIVE_POLICY_GUARD_ADDRESS,
     SIGNATURE_VERIFIER_ADDRESS,
     STABLECOIN_DEX_ADDRESS,
+    STORAGE_CREDITS_ADDRESS,
     THETA_USD,
     TIP20_FACTORY_ADDRESS,
     TIP20_REWARDS_REGISTRY_ADDRESS,
@@ -60,6 +62,7 @@ from .fee_manager import FeeManager
 from .nonce import Nonce
 from .receive_policy_guard import InboundKind, ReceivePolicyGuard
 from .signature_verifier import SignatureVerifier
+from .storage_credits import StorageCreditMode, StorageCredits
 from .tip20 import TIP20
 from .tip403 import BlockedReason, PolicyType, TIP403Registry
 
@@ -74,10 +77,12 @@ __all__ = [
     "TIP403Registry",
     "ReceivePolicyGuard",
     "SignatureVerifier",
+    "StorageCredits",
     # Enums
     "PolicyType",
     "BlockedReason",
     "InboundKind",
+    "StorageCreditMode",
     # ABIs
     "TIP20_ABI",
     "TIP20_ROLES_AUTH_ABI",
@@ -89,6 +94,7 @@ __all__ = [
     "TIP403_REGISTRY_ABI",
     "RECEIVE_POLICY_GUARD_ABI",
     "SIGNATURE_VERIFIER_ABI",
+    "STORAGE_CREDITS_ABI",
     # Token addresses
     "PATH_USD",
     "ALPHA_USD",
@@ -104,5 +110,6 @@ __all__ = [
     "TIP403_REGISTRY_ADDRESS",
     "RECEIVE_POLICY_GUARD_ADDRESS",
     "SIGNATURE_VERIFIER_ADDRESS",
+    "STORAGE_CREDITS_ADDRESS",
     "VALIDATOR_CONFIG_ADDRESS",
 ]
