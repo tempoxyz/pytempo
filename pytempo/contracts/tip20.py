@@ -114,9 +114,10 @@ class TIP20:
         """Build a ``claimRewards()`` call.
 
         Note:
-            TIP-20 rewards are deprecated as of the T7 upgrade (TIP-1075).
-            ``claimRewards`` remains valid but, post-T7, only pays out
-            already-settled reward balances; no new rewards accrue.
+            TIP-20 rewards are deprecated by the T7 upgrade (TIP-1075): no new
+            rewards accrue post-T7. ``claimRewards`` stays valid — through T7 it
+            still checkpoints and settles pre-T7 lazy accruals, and from the T8
+            cleanup fork it pays out only already-settled reward balances.
         """
         data = encode_calldata(_ABI, "claimRewards", [])
         return Call.create(to=self.token, data=data)
