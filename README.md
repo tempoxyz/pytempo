@@ -234,6 +234,13 @@ Immutable, strongly-typed transaction (frozen attrs model).
 - `calls` (tuple[Call, ...]) - Tuple of Call objects
 - `access_list` (tuple[AccessListItem, ...]) - EIP-2930 access list
 
+> **Note (T7 / TIP-1067):** the base fee is now dynamic — it floats within a
+> protocol-bounded range instead of being fixed, rising under load and decaying
+> when idle. The range is capped below the old fixed base fee, so fees never
+> exceed pre-T7 pricing. Still set `max_fee_per_gas` from a live fee estimate
+> rather than a hardcoded constant; the `2_000_000_000` values in the examples
+> above are illustrative only.
+
 **Methods:**
 
 - `sign(private_key, for_fee_payer=False)` - Sign transaction (returns new instance)
