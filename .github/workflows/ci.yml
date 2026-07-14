@@ -151,9 +151,12 @@ jobs:
           exit 1
 
       - name: Run integration tests (offline only - localnet lacks tempo_fundAddress)
-        run: uv run pytest -v -s tests/test_integration.py -k "TestNodeConnection or TestTransactionCreation"
+        run: >-
+          uv run pytest -v -s tests/test_integration.py
+          -k "TestNodeConnection or TestTransactionCreation or test_get_current_committee"
         env:
           TEMPO_RPC_URL: http://localhost:8545
+          TEMPO_HARDFORK: T8
 
       - name: Show Tempo node logs on failure
         if: failure()

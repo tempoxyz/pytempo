@@ -34,6 +34,10 @@ SIGNATURE_VERIFIER_ADDRESS = to_checksum_address(
 RECEIVE_POLICY_GUARD_ADDRESS = to_checksum_address(
     "0xB10C000000000000000000000000000000000000"
 )
+# T8 CurrentCommittee precompile — effective committee selected by consensus
+CURRENT_COMMITTEE_ADDRESS = to_checksum_address(
+    "0xC077e00000000000000000000000000000000000"
+)
 
 # Tokens (from StdTokens.sol)
 PATH_USD = to_checksum_address("0x20C0000000000000000000000000000000000000")

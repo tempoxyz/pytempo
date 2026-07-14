@@ -266,6 +266,7 @@ Typed call builders for Tempo precompiles and tokens:
 - `FeeAMM` — Fee AMM liquidity operations (mint, burn, rebalance_swap)
 - `FeeManager` — Fee manager operations (set fee token, distribute fees); inherits `FeeAMM`
 - `Nonce` — Nonce precompile queries (get_nonce)
+- `CurrentCommittee` — Current effective validator committee queries (get_committee_members)
 
 ## Development
 
