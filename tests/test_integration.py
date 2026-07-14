@@ -22,6 +22,7 @@ import time
 import pytest
 from eth_account import Account
 from web3 import Web3
+from web3.logs import DISCARD
 
 from pytempo import (
     Call,
@@ -36,9 +37,11 @@ from pytempo.contracts import (
     ALPHA_USD,
     BETA_USD,
     PATH_USD,
+    STABLECOIN_DEX_ABI,
     THETA_USD,
     TIP20,
     AccountKeychain,
+    CurrentCommittee,
     FeeManager,
     StablecoinDEX,
 )
@@ -49,13 +52,16 @@ HIGH_GAS_LIMIT = 500_000
 
 # Test-specific contract addresses
 COUNTER_CONTRACT = "0x86A2EE8FAf9A840F7a2c64CA3d51209F9A02081D"
-LP_RECIPIENT = "0x6c4143BEd3A13cf9E5E43d45C60aD816FC091d0c"
 COUNTER_INCREMENT = bytes.fromhex("d09de08a")  # increment() selector
 
 # Skip all tests if TEMPO_RPC_URL is not set
 pytestmark = pytest.mark.skipif(
     not os.environ.get("TEMPO_RPC_URL"),
     reason="TEMPO_RPC_URL environment variable not set",
+)
+requires_t8 = pytest.mark.skipif(
+    os.environ.get("TEMPO_HARDFORK") != "T8",
+    reason="requires an activated T8 network",
 )
 
 
@@ -267,6 +273,61 @@ class TestTransactionSubmission:
         assert receipt["status"] == 1
 
 
+@requires_t8
+class TestT8Smoke:
+    """Smoke test T8 reads and existing precompile operations."""
+
+    def test_get_current_committee(self, w3):
+        epoch, public_keys = CurrentCommittee.get_committee_members(w3)
+
+        assert epoch >= 0
+        assert public_keys or epoch == 0
+        assert all(isinstance(key, bytes) and len(key) == 32 for key in public_keys)
+
+    def test_stablecoin_dex_place_and_cancel(self, w3, chain_id, funded_account):
+        """Place and cancel an ask without requiring seeded swap liquidity."""
+        max_fee, priority_fee = get_gas_params(w3)
+        nonce = w3.eth.get_transaction_count(funded_account.address)
+
+        tx = TempoTransaction.create(
+            chain_id=chain_id,
+            nonce=nonce,
+            gas_limit=HIGH_GAS_LIMIT,
+            max_fee_per_gas=max_fee,
+            max_priority_fee_per_gas=priority_fee,
+            calls=(
+                TIP20(BETA_USD).approve(
+                    spender=StablecoinDEX.ADDRESS, amount=100_000_000
+                ),
+                StablecoinDEX.place(
+                    token=BETA_USD, amount=100_000_000, is_bid=False, tick=10
+                ),
+            ),
+        )
+        signed = tx.sign(funded_account.key.hex())
+        receipt = send_tx(w3, signed)
+        assert receipt["status"] == 1
+
+        dex = w3.eth.contract(address=StablecoinDEX.ADDRESS, abi=STABLECOIN_DEX_ABI)
+        events = dex.events.OrderPlaced().process_receipt(receipt, errors=DISCARD)
+        assert len(events) == 1
+
+        cancel_tx = TempoTransaction.create(
+            chain_id=chain_id,
+            nonce=w3.eth.get_transaction_count(funded_account.address),
+            gas_limit=HIGH_GAS_LIMIT,
+            max_fee_per_gas=max_fee,
+            max_priority_fee_per_gas=priority_fee,
+            calls=(
+                StablecoinDEX.cancel(order_id=events[0]["args"]["orderId"]),
+                StablecoinDEX.withdraw(token=BETA_USD, amount=100_000_000),
+            ),
+        )
+        signed_cancel = cancel_tx.sign(funded_account.key.hex())
+        cancel_receipt = send_tx(w3, signed_cancel)
+        assert cancel_receipt["status"] == 1
+
+
 class TestFeeTokens:
     """Test fee token operations (tempo-check.sh fee token tests)."""
 
@@ -288,7 +349,7 @@ class TestFeeTokens:
                         user_token=token,
                         validator_token=PATH_USD,
                         amount=1_000_000_000,
-                        to=LP_RECIPIENT,
+                        to=funded_account.address,
                     ),
                 ),
             )

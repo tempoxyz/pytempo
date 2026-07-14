@@ -27,6 +27,7 @@ Raw ABIs for use with ``w3.eth.contract()``::
 
 from .abis import (
     ACCOUNT_KEYCHAIN_ABI,
+    CURRENT_COMMITTEE_ABI,
     FEE_AMM_ABI,
     FEE_MANAGER_ABI,
     NONCE_ABI,
@@ -42,6 +43,7 @@ from .addresses import (
     ACCOUNT_KEYCHAIN_ADDRESS,
     ALPHA_USD,
     BETA_USD,
+    CURRENT_COMMITTEE_ADDRESS,
     FEE_MANAGER_ADDRESS,
     NONCE_ADDRESS,
     PATH_USD,
@@ -54,6 +56,7 @@ from .addresses import (
     TIP403_REGISTRY_ADDRESS,
     VALIDATOR_CONFIG_ADDRESS,
 )
+from .current_committee import CurrentCommittee
 from .dex import StablecoinDEX
 from .fee_amm import FeeAMM
 from .fee_manager import FeeManager
@@ -74,6 +77,7 @@ __all__ = [
     "TIP403Registry",
     "ReceivePolicyGuard",
     "SignatureVerifier",
+    "CurrentCommittee",
     # Enums
     "PolicyType",
     "BlockedReason",
@@ -89,6 +93,7 @@ __all__ = [
     "TIP403_REGISTRY_ABI",
     "RECEIVE_POLICY_GUARD_ABI",
     "SIGNATURE_VERIFIER_ABI",
+    "CURRENT_COMMITTEE_ABI",
     # Token addresses
     "PATH_USD",
     "ALPHA_USD",
@@ -104,5 +109,6 @@ __all__ = [
     "TIP403_REGISTRY_ADDRESS",
     "RECEIVE_POLICY_GUARD_ADDRESS",
     "SIGNATURE_VERIFIER_ADDRESS",
+    "CURRENT_COMMITTEE_ADDRESS",
     "VALIDATOR_CONFIG_ADDRESS",
 ]
