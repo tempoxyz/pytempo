@@ -1,6 +1,7 @@
 """Tests for the strongly-typed models."""
 
 import pytest
+from eth_utils import keccak
 
 from pytempo import (
     AccessListItem,
@@ -192,6 +193,50 @@ class TestTempoTransaction:
         assert signed_tx.sender_signature is not None
         assert signed_tx.sender_address is not None
         assert tx.sender_signature is None
+
+    @pytest.mark.parametrize(
+        ("awaiting_fee_payer", "expected"),
+        [
+            (
+                False,
+                "76f86682a5bf0102830f4240dcdb944d50500000000000000000000000000000000000"
+                "808412345678c0a0ffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+                "ffffffff0784713fb3008094000000000000000000000000000000000000000380c0",
+            ),
+            (
+                True,
+                "76f85282a5bf0102830f4240dcdb944d50500000000000000000000000000000000000"
+                "808412345678c0a0ffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+                "ffffffff0784713fb300808000c0",
+            ),
+        ],
+    )
+    def test_encode_for_signing_matches_signing_hash(
+        self, awaiting_fee_payer, expected
+    ):
+        tx = TempoTransaction.create(
+            chain_id=42431,
+            gas_limit=1_000_000,
+            max_fee_per_gas=2,
+            max_priority_fee_per_gas=1,
+            nonce=7,
+            nonce_key=(1 << 256) - 1,
+            valid_before=1_900_000_000,
+            fee_token="0x0000000000000000000000000000000000000003",
+            awaiting_fee_payer=awaiting_fee_payer,
+            calls=(
+                Call.create(
+                    to="0x4d50500000000000000000000000000000000000",
+                    data="0x12345678",
+                ),
+            ),
+        )
+
+        encoded = tx.encode_for_signing()
+
+        assert encoded[0] == tx.TRANSACTION_TYPE
+        assert keccak(encoded) == tx.get_signing_hash()
+        assert encoded.hex() == expected
 
     def test_create_factory(self):
         tx = TempoTransaction.create(
