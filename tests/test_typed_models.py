@@ -195,9 +195,10 @@ class TestTempoTransaction:
         assert tx.sender_signature is None
 
     @pytest.mark.parametrize(
-        ("awaiting_fee_payer", "expected"),
+        ("awaiting_fee_payer", "for_fee_payer", "expected"),
         [
             (
+                False,
                 False,
                 "76f86682a5bf0102830f4240dcdb944d50500000000000000000000000000000000000"
                 "808412345678c0a0ffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
@@ -205,16 +206,26 @@ class TestTempoTransaction:
             ),
             (
                 True,
+                False,
                 "76f85282a5bf0102830f4240dcdb944d50500000000000000000000000000000000000"
                 "808412345678c0a0ffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
                 "ffffffff0784713fb300808000c0",
             ),
+            (
+                False,
+                True,
+                # ox 0.14.29 TxEnvelopeTempo fee-payer signing vector.
+                "78f87a82a5bf0102830f4240dcdb944d50500000000000000000000000000000000000"
+                "808412345678c0a0ffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+                "ffffffff0784713fb3008094000000000000000000000000000000000000000394f39f"
+                "d6e51aad88f6f4ce6ab8827279cfffb92266c0",
+            ),
         ],
     )
     def test_encode_for_signing_matches_signing_hash(
-        self, awaiting_fee_payer, expected
+        self, awaiting_fee_payer, for_fee_payer, expected
     ):
-        tx = TempoTransaction.create(
+        tx = TempoTransaction(
             chain_id=42431,
             gas_limit=1_000_000,
             max_fee_per_gas=2,
@@ -223,6 +234,7 @@ class TestTempoTransaction:
             nonce_key=(1 << 256) - 1,
             valid_before=1_900_000_000,
             fee_token="0x0000000000000000000000000000000000000003",
+            sender_address="0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
             awaiting_fee_payer=awaiting_fee_payer,
             calls=(
                 Call.create(
@@ -232,10 +244,9 @@ class TestTempoTransaction:
             ),
         )
 
-        encoded = tx.encode_for_signing()
+        encoded = tx.encode_for_signing(for_fee_payer=for_fee_payer)
 
-        assert encoded[0] == tx.TRANSACTION_TYPE
-        assert keccak(encoded) == tx.get_signing_hash()
+        assert keccak(encoded) == tx.get_signing_hash(for_fee_payer=for_fee_payer)
         assert encoded.hex() == expected
 
     def test_create_factory(self):
