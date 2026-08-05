@@ -266,6 +266,38 @@ Typed call builders for Tempo precompiles and tokens:
 - `FeeAMM` — Fee AMM liquidity operations (mint, burn, rebalance_swap)
 - `FeeManager` — Fee manager operations (set fee token, distribute fees); inherits `FeeAMM`
 - `Nonce` — Nonce precompile queries (get_nonce)
+- `StorageCredits` — T7 storage-credit accounting (set_mode, set_budget, balance/mode/budget queries)
+
+### Storage Credits (T7 / TIP-1060, v0.6.0+)
+
+Storage credits offset the cost of reusing previously freed storage. Each
+account earns a credit when it deletes one of its own storage slots and can
+apply it to a later storage creation via a per-transaction *mode*.
+
+```python
+from pytempo import TempoTransaction
+from pytempo.contracts import StorageCredits, StorageCreditMode
+
+# Read the persistent credit balance for an account
+balance = StorageCredits.balance_of(w3, account="0xYourAddress...")
+
+# Select a storage-creation mode for the current transaction.
+# NOTE: mode/budget are transaction-local (reset every tx) and must come
+# BEFORE the storage-creating calls they affect.
+tx = TempoTransaction.create(
+    chain_id=42429,
+    gas_limit=200_000,
+    max_fee_per_gas=2_000_000_000,
+    calls=(
+        StorageCredits.set_mode(StorageCreditMode.PRESERVE),
+        # ... subsequent calls that create storage ...
+    ),
+)
+```
+
+Modes: `REFUND` (default, simulation-safe), `PRESERVE` (never consume credits),
+`DIRECT` (consume synchronously; `set_budget(n)` bounds spend to `n`, while
+`set_mode(DIRECT)` uses `uint64` max).
 
 ## Development
 
