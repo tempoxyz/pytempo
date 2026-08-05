@@ -111,7 +111,14 @@ class TIP20:
         return Call.create(to=self.token, data=data)
 
     def claim_rewards(self) -> Call:
-        """Build a ``claimRewards()`` call."""
+        """Build a ``claimRewards()`` call.
+
+        Note:
+            TIP-20 rewards are deprecated by the T7 upgrade (TIP-1075): no new
+            rewards accrue post-T7. ``claimRewards`` stays valid — through T7 it
+            still checkpoints and settles pre-T7 lazy accruals, and from the T8
+            cleanup fork it pays out only already-settled reward balances.
+        """
         data = encode_calldata(_ABI, "claimRewards", [])
         return Call.create(to=self.token, data=data)
 
@@ -121,7 +128,12 @@ class TIP20:
         return Call.create(to=self.token, data=data)
 
     def distribute_reward(self, *, amount: int) -> Call:
-        """Build a ``distributeReward(uint256)`` call."""
+        """Build a ``distributeReward(uint256)`` call.
+
+        .. deprecated:: T7
+            TIP-20 rewards are deprecated (TIP-1075). Post-T7 this call is a
+            non-reverting no-op: no new rewards are distributed.
+        """
         data = encode_calldata(_ABI, "distributeReward", [amount])
         return Call.create(to=self.token, data=data)
 
@@ -141,7 +153,12 @@ class TIP20:
         return Call.create(to=self.token, data=data)
 
     def set_reward_recipient(self, *, new_reward_recipient: str) -> Call:
-        """Build a ``setRewardRecipient(address)`` call."""
+        """Build a ``setRewardRecipient(address)`` call.
+
+        .. deprecated:: T7
+            TIP-20 rewards are deprecated (TIP-1075). Post-T7 this call is a
+            non-reverting no-op: reward opt-ins/recipients no longer change.
+        """
         data = encode_calldata(_ABI, "setRewardRecipient", [new_reward_recipient])
         return Call.create(to=self.token, data=data)
 

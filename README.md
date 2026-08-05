@@ -234,6 +234,13 @@ Immutable, strongly-typed transaction (frozen attrs model).
 - `calls` (tuple[Call, ...]) - Tuple of Call objects
 - `access_list` (tuple[AccessListItem, ...]) - EIP-2930 access list
 
+> **Note (T7 / TIP-1067):** the base fee is now dynamic — it floats within a
+> protocol-bounded range instead of being fixed, rising under load and decaying
+> when idle. The range is capped below the old fixed base fee, so fees never
+> exceed pre-T7 pricing. Still set `max_fee_per_gas` from a live fee estimate
+> rather than a hardcoded constant; the `2_000_000_000` values in the examples
+> above are illustrative only.
+
 **Methods:**
 
 - `sign(private_key, for_fee_payer=False)` - Sign transaction (returns new instance)
@@ -261,12 +268,44 @@ EIP-2930 access list entry.
 Typed call builders for Tempo precompiles and tokens:
 
 - `TIP20` — TIP-20 token operations (transfer, approve, mint, burn, permit)
-- `StablecoinDEX` — Stablecoin DEX operations (place, cancel, swap, withdraw)
+- `StablecoinDEX` — Stablecoin DEX operations (place, cancel, swap, withdraw, storage_credits query)
 - `AccountKeychain` — Access key management (authorize, revoke, spending limits, queries)
 - `FeeAMM` — Fee AMM liquidity operations (mint, burn, rebalance_swap)
 - `FeeManager` — Fee manager operations (set fee token, distribute fees); inherits `FeeAMM`
 - `Nonce` — Nonce precompile queries (get_nonce)
 - `CurrentCommittee` — Current effective validator committee queries (get_committee_members)
+- `StorageCredits` — T7 storage-credit accounting (set_mode, set_budget, balance/mode/budget queries)
+
+### Storage Credits (T7 / TIP-1060, v0.6.0+)
+
+Storage credits offset the cost of reusing previously freed storage. Each
+account earns a credit when it deletes one of its own storage slots and can
+apply it to a later storage creation via a per-transaction *mode*.
+
+```python
+from pytempo import TempoTransaction
+from pytempo.contracts import StorageCredits, StorageCreditMode
+
+# Read the persistent credit balance for an account
+balance = StorageCredits.balance_of(w3, account="0xYourAddress...")
+
+# Select a storage-creation mode for the current transaction.
+# NOTE: mode/budget are transaction-local (reset every tx) and must come
+# BEFORE the storage-creating calls they affect.
+tx = TempoTransaction.create(
+    chain_id=42429,
+    gas_limit=200_000,
+    max_fee_per_gas=2_000_000_000,
+    calls=(
+        StorageCredits.set_mode(StorageCreditMode.PRESERVE),
+        # ... subsequent calls that create storage ...
+    ),
+)
+```
+
+Modes: `REFUND` (default, simulation-safe), `PRESERVE` (never consume credits),
+`DIRECT` (consume synchronously; `set_budget(n)` bounds spend to `n`, while
+`set_mode(DIRECT)` uses `uint64` max).
 
 ## Development
 

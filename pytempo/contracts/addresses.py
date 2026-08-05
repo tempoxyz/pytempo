@@ -38,6 +38,10 @@ RECEIVE_POLICY_GUARD_ADDRESS = to_checksum_address(
 CURRENT_COMMITTEE_ADDRESS = to_checksum_address(
     "0xC077e00000000000000000000000000000000000"
 )
+# T7 (TIP-1060) StorageCredits precompile — per-account reusable storage accounting
+STORAGE_CREDITS_ADDRESS = to_checksum_address(
+    "0x1060000000000000000000000000000000000000"
+)
 
 # Tokens (from StdTokens.sol)
 PATH_USD = to_checksum_address("0x20C0000000000000000000000000000000000000")

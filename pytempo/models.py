@@ -394,11 +394,20 @@ class TempoTransaction:
         Returns:
             32-byte hash to sign
         """
-        if for_fee_payer:
-            return self._signing_hash_fee_payer()
-        return self._signing_hash_sender()
+        return keccak(self.encode_for_signing(for_fee_payer=for_fee_payer))
 
-    def _signing_hash_sender(self) -> bytes:
+    def encode_for_signing(self, for_fee_payer: bool = False) -> bytes:
+        """Encode the transaction preimage used for signing.
+
+        This is the exact byte sequence hashed by :meth:`get_signing_hash`.
+        It is useful for protocols that bind transaction context before the
+        transaction is broadcast.
+        """
+        if for_fee_payer:
+            return self._encode_for_fee_payer_signing()
+        return self._encode_for_sender_signing()
+
+    def _encode_for_sender_signing(self) -> bytes:
         self.validate()
         has_fee_payer = self._has_fee_payer()
 
@@ -423,9 +432,9 @@ class TempoTransaction:
         if self.key_authorization is not None:
             fields.append(self.key_authorization.as_rlp_payload())
 
-        return keccak(bytes([self.TRANSACTION_TYPE]) + rlp.encode(fields))
+        return bytes([self.TRANSACTION_TYPE]) + rlp.encode(fields)
 
-    def _signing_hash_fee_payer(self) -> bytes:
+    def _encode_for_fee_payer_signing(self) -> bytes:
         self.validate(require_sender=True)
 
         fields = [
@@ -447,7 +456,7 @@ class TempoTransaction:
         if self.key_authorization is not None:
             fields.append(self.key_authorization.as_rlp_payload())
 
-        return keccak(bytes([self.FEE_PAYER_MAGIC_BYTE]) + rlp.encode(fields))
+        return bytes([self.FEE_PAYER_MAGIC_BYTE]) + rlp.encode(fields)
 
     def encode(self) -> bytes:
         """Encode complete transaction: ``0x76 || rlp([fields])``."""
