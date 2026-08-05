@@ -6,9 +6,20 @@ import pytest
 from eth_utils import function_signature_to_4byte_selector
 
 from pytempo import KeyRestrictions
-from pytempo.contracts import ALPHA_USD, BETA_USD, TIP20, TIP20_ROLES_AUTH_ABI, Nonce
+from pytempo.contracts import (
+    ALPHA_USD,
+    BETA_USD,
+    TIP20,
+    TIP20_ROLES_AUTH_ABI,
+    Nonce,
+    StablecoinDEX,
+)
 from pytempo.contracts.account_keychain import AccountKeychain
-from pytempo.contracts.addresses import ACCOUNT_KEYCHAIN_ADDRESS, NONCE_ADDRESS
+from pytempo.contracts.addresses import (
+    ACCOUNT_KEYCHAIN_ADDRESS,
+    NONCE_ADDRESS,
+    STABLECOIN_DEX_ADDRESS,
+)
 from pytempo.keychain import SignatureType
 
 RECIPIENT = "0xF0109fC8DF283027b6285cc889F5aA624EaC1F55"
@@ -213,3 +224,29 @@ def test_nonce_get_nonce_rejects_empty_response():
     tx = mock_w3.eth.call.call_args.args[0]
     assert tx["to"] == NONCE_ADDRESS
     assert bytes.fromhex(tx["data"][2:10]) == _selector("getNonce(address,uint256)")
+
+
+def test_dex_storage_credits_decodes_and_encodes_selector():
+    mock_w3 = MagicMock()
+    mock_w3.eth.call.return_value = (7).to_bytes(32, "big")
+
+    assert StablecoinDEX.storage_credits(mock_w3, user=RECIPIENT) == 7
+
+    tx = mock_w3.eth.call.call_args.args[0]
+    assert tx["to"] == STABLECOIN_DEX_ADDRESS
+    assert bytes.fromhex(tx["data"][2:10]) == _selector("storageCredits(address)")
+    # the user address is encoded (left-padded to 32 bytes) into the calldata
+    assert tx["data"][10:].lower() == ("0" * 24) + RECIPIENT[2:].lower()
+
+
+def test_dex_storage_credits_rejects_empty_user():
+    with pytest.raises(ValueError, match="user required"):
+        StablecoinDEX.storage_credits(MagicMock(), user="")
+
+
+def test_dex_storage_credits_rejects_overflow():
+    mock_w3 = MagicMock()
+    mock_w3.eth.call.return_value = (2**64).to_bytes(32, "big")
+
+    with pytest.raises(ValueError, match="uint64"):
+        StablecoinDEX.storage_credits(mock_w3, user=RECIPIENT)

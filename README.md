@@ -261,7 +261,7 @@ EIP-2930 access list entry.
 Typed call builders for Tempo precompiles and tokens:
 
 - `TIP20` — TIP-20 token operations (transfer, approve, mint, burn, permit)
-- `StablecoinDEX` — Stablecoin DEX operations (place, cancel, swap, withdraw)
+- `StablecoinDEX` — Stablecoin DEX operations (place, cancel, swap, withdraw, storage_credits query)
 - `AccountKeychain` — Access key management (authorize, revoke, spending limits, queries)
 - `FeeAMM` — Fee AMM liquidity operations (mint, burn, rebalance_swap)
 - `FeeManager` — Fee manager operations (set fee token, distribute fees); inherits `FeeAMM`
