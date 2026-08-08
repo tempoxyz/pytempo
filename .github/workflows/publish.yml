@@ -22,7 +22,7 @@ jobs:
         with:
           persist-credentials: true
 
-      - uses: wevm/changelogs@de0250123a1d70a2b64a458bd5efcf313986df7a # OIDC trusted publishing
+      - uses: wevm/changelogs@3f5a172c4c58de20cc77b40f735ea20e8c07028a # OIDC trusted publishing
         with:
           ecosystem: python
           python-version: '3.12'
