@@ -28,6 +28,6 @@ PRIVATE_KEY=0xYourPrivateKeyHere python examples/batch_calls.py
 
 ## Notes
 
-- All examples connect to Tempo devnet
+- All examples connect to Tempo testnet
 - Tempo doesn't support native transfers (sending ETH value), so transactions use value=0
 - Gas is paid in custom fee tokens (ERC-20)
