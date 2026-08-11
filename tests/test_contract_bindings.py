@@ -145,6 +145,54 @@ def test_tip20_has_role_rejects_noncanonical_bool():
         token.has_role(mock_w3, role=ROLE, account=RECIPIENT)
 
 
+def test_tip20_scalar_read_helpers_decode_and_encode_selectors():
+    token = TIP20(ALPHA_USD)
+    mock_w3 = MagicMock()
+    mock_w3.eth.call.side_effect = [
+        (1000).to_bytes(32, "big"),
+        (500).to_bytes(32, "big"),
+        (10_000).to_bytes(32, "big"),
+        (6).to_bytes(32, "big"),
+        (2**80).to_bytes(32, "big"),
+        (1).to_bytes(32, "big"),
+    ]
+
+    assert token.balance_of(mock_w3, account=RECIPIENT) == 1000
+    assert token.allowance(mock_w3, owner=RECIPIENT, spender=BETA_USD) == 500
+    assert token.total_supply(mock_w3) == 10_000
+    assert token.decimals(mock_w3) == 6
+    assert token.supply_cap(mock_w3) == 2**80
+    assert token.paused(mock_w3) is True
+
+    expected = [
+        "balanceOf(address)",
+        "allowance(address,address)",
+        "totalSupply()",
+        "decimals()",
+        "supplyCap()",
+        "paused()",
+    ]
+    assert len(mock_w3.eth.call.call_args_list) == len(expected)
+    for call, signature in zip(mock_w3.eth.call.call_args_list, expected):
+        tx = call.args[0]
+        assert tx["to"] == ALPHA_USD
+        assert bytes.fromhex(tx["data"][2:10]) == _selector(signature)
+
+
+def test_tip20_balance_of_rejects_empty_account():
+    with pytest.raises(ValueError, match="account required"):
+        TIP20(ALPHA_USD).balance_of(MagicMock(), account="")
+
+
+def test_tip20_paused_rejects_noncanonical_bool():
+    token = TIP20(ALPHA_USD)
+    mock_w3 = MagicMock()
+    mock_w3.eth.call.return_value = (2).to_bytes(32, "big")
+
+    with pytest.raises(ValueError, match="ABI bool"):
+        token.paused(mock_w3)
+
+
 def test_account_keychain_t5_builders_encode_expected_selectors():
     restrictions = KeyRestrictions()
 
