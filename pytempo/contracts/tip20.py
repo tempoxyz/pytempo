@@ -13,7 +13,7 @@ Returns :class:`~pytempo.Call` objects ready to use in a
 from pytempo.models import Call
 from pytempo.types import BytesLike, as_hash32
 
-from ._decode import decode_bool, decode_hash32
+from ._decode import decode_bool, decode_hash32, decode_uint
 from ._encode import encode_calldata
 from .abis import TIP20_ABI, TIP20_ROLES_AUTH_ABI
 
@@ -192,6 +192,45 @@ class TIP20:
             _ABI, "permit", [owner, spender, value, deadline, v, r, s]
         )
         return Call.create(to=self.token, data=data)
+
+    def balance_of(self, w3, *, account: str) -> int:
+        """Query ``balanceOf(address)``."""
+        _require_account(account)
+        call_data = encode_calldata(_ABI, "balanceOf", [account])
+        result = w3.eth.call({"to": self.token, "data": call_data})
+        return decode_uint(result, "balanceOf")
+
+    def allowance(self, w3, *, owner: str, spender: str) -> int:
+        """Query ``allowance(address,address)``."""
+        _require_account(owner)
+        _require_account(spender)
+        call_data = encode_calldata(_ABI, "allowance", [owner, spender])
+        result = w3.eth.call({"to": self.token, "data": call_data})
+        return decode_uint(result, "allowance")
+
+    def total_supply(self, w3) -> int:
+        """Query ``totalSupply()``."""
+        call_data = encode_calldata(_ABI, "totalSupply", [])
+        result = w3.eth.call({"to": self.token, "data": call_data})
+        return decode_uint(result, "totalSupply")
+
+    def decimals(self, w3) -> int:
+        """Query ``decimals()``."""
+        call_data = encode_calldata(_ABI, "decimals", [])
+        result = w3.eth.call({"to": self.token, "data": call_data})
+        return decode_uint(result, "decimals")
+
+    def supply_cap(self, w3) -> int:
+        """Query ``supplyCap()``."""
+        call_data = encode_calldata(_ABI, "supplyCap", [])
+        result = w3.eth.call({"to": self.token, "data": call_data})
+        return decode_uint(result, "supplyCap")
+
+    def paused(self, w3) -> bool:
+        """Query ``paused()``."""
+        call_data = encode_calldata(_ABI, "paused", [])
+        result = w3.eth.call({"to": self.token, "data": call_data})
+        return decode_bool(result, "paused")
 
     def grant_role(self, *, role: BytesLike, account: str) -> Call:
         """Build a ``grantRole(bytes32,address)`` call."""
