@@ -55,7 +55,7 @@ from .types import (
     validate_nonempty_address,
 )
 
-__version__ = "0.3.1"
+__version__ = "0.5.1"
 
 __all__ = [
     # Types
