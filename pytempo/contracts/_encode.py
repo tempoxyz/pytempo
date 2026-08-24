@@ -22,6 +22,8 @@ def _normalize_arg(value: object) -> object:
     """Auto-checksum bare hex addresses so callers don't have to."""
     if isinstance(value, str) and is_hex_address(value):
         return to_checksum_address(value)
+    if isinstance(value, dict):
+        return {k: _normalize_arg(v) for k, v in value.items()}
     if isinstance(value, (list, tuple)):
         return type(value)(_normalize_arg(v) for v in value)
     return value
