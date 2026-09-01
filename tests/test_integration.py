@@ -775,14 +775,10 @@ class TestSetUserFeeToken:
         assert receipt["status"] == 1
 
 
-class TestKeychainSelectors:
-    """Test keychain precompile selectors (authorizeKey, getKey, revokeKey).
+class TestKeychainLifecycle:
+    """Test inline key authorization followed by keychain queries and revocation."""
 
-    Parity with tempo-go TestIntegration_KeychainSelectors: exercises the
-    authorizeKey → getKey → revokeKey round-trip via the precompile.
-    """
-
-    def test_authorize_get_revoke_round_trip(self, w3, chain_id, funded_account, is_t2):
+    def test_authorize_get_revoke_round_trip(self, w3, chain_id, funded_account):
         """Authorize an access key, verify via getKey, revoke, verify revoked."""
         max_fee, priority_fee = get_gas_params(w3)
 
@@ -790,23 +786,47 @@ class TestKeychainSelectors:
         # 10 years from now
         expiry = int(time.time()) + 10 * 365 * 24 * 3600
 
-        # Step 1: Authorize key via EIP-1559 tx (same as tempo-go)
-        nonce = w3.eth.get_transaction_count(funded_account.address)
-        auth_call = AccountKeychain.authorize_key(
+        # Step 1: Authorize through the transaction key_authorization field. TIP-1099
+        # removes the direct authorizeKey precompile selectors at T11.
+        auth = KeyAuthorization(
             key_id=access_key.address,
-            signature_type=SignatureType.SECP256K1,
-            restrictions=KeyRestrictions(expiry=expiry),
-            legacy=is_t2,
+            chain_id=chain_id,
+            key_type=SignatureType.SECP256K1,
+            expiry=expiry,
+        )
+        signed_auth = auth.sign(funded_account.key.hex())
+        nonce_key = 3000 + (int(time.time()) % 10000)
+        tx = TempoTransaction.create(
+            chain_id=chain_id,
+            nonce=0,
+            nonce_key=nonce_key,
+            gas_limit=0,
+            max_fee_per_gas=max_fee,
+            max_priority_fee_per_gas=priority_fee,
+            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
+            key_authorization=signed_auth,
+        )
+        gas_estimate = w3.eth.estimate_gas(
+            tx.to_estimate_gas_request(
+                funded_account.address,
+                key_id=access_key.address,
+                key_authorization=signed_auth,
+            )
         )
         tx = TempoTransaction.create(
             chain_id=chain_id,
-            nonce=nonce,
-            gas_limit=600_000,
+            nonce=0,
+            nonce_key=nonce_key,
+            gas_limit=gas_estimate,
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
-            calls=(auth_call,),
+            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
+            key_authorization=signed_auth,
         )
-        signed = tx.sign(funded_account.key.hex())
+        signed = tx.sign_access_key(
+            access_key_private_key=access_key.key.hex(),
+            root_account=funded_account.address,
+        )
         receipt = send_tx(w3, signed)
         assert receipt["status"] == 1
 
