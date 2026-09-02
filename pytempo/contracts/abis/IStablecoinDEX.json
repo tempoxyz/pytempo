@@ -17,6 +17,11 @@
   },
   {
     "inputs": [],
+    "name": "IndexAlreadySet",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "InsufficientBalance",
     "type": "error"
   },
@@ -414,6 +419,49 @@
     "inputs": [
       {
         "internalType": "bytes32",
+        "name": "key",
+        "type": "bytes32"
+      }
+    ],
+    "name": "bookIndexForKey",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "exists",
+        "type": "bool"
+      },
+      {
+        "internalType": "uint32",
+        "name": "index",
+        "type": "uint32"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint32",
+        "name": "index",
+        "type": "uint32"
+      }
+    ],
+    "name": "bookKeyForIndex",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "key",
+        "type": "bytes32"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
         "name": "pairKey",
         "type": "bytes32"
       }
@@ -789,6 +837,19 @@
       }
     ],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint32",
+        "name": "index",
+        "type": "uint32"
+      }
+    ],
+    "name": "setBookIndex",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
