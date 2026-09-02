@@ -331,8 +331,8 @@ class TestT8Smoke:
 class TestFeeTokens:
     """Test fee token operations (tempo-check.sh fee token tests)."""
 
-    def test_add_fee_token_liquidity(self, w3, chain_id, funded_account):
-        """Test adding fee token liquidity (AlphaUSD, BetaUSD, ThetaUSD)."""
+    def test_send_with_fee_tokens(self, w3, chain_id, funded_account):
+        """Test transactions using genesis-seeded fee token liquidity."""
         max_fee, priority_fee = get_gas_params(w3)
 
         for token in [ALPHA_USD, BETA_USD, THETA_USD]:
@@ -341,39 +341,15 @@ class TestFeeTokens:
             tx = TempoTransaction.create(
                 chain_id=chain_id,
                 nonce=nonce,
-                gas_limit=HIGH_GAS_LIMIT,
+                gas_limit=BASE_GAS_LIMIT,
                 max_fee_per_gas=max_fee,
                 max_priority_fee_per_gas=priority_fee,
-                calls=(
-                    FeeManager.mint(
-                        user_token=token,
-                        validator_token=PATH_USD,
-                        amount=1_000_000_000,
-                        to=funded_account.address,
-                    ),
-                ),
+                fee_token=token,
+                calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
             )
             signed = tx.sign(funded_account.key.hex())
             receipt = send_tx(w3, signed)
             assert receipt["status"] == 1
-
-    def test_send_with_fee_token(self, w3, chain_id, funded_account):
-        """Test sending transaction with custom fee token."""
-        max_fee, priority_fee = get_gas_params(w3)
-        nonce = w3.eth.get_transaction_count(funded_account.address)
-
-        tx = TempoTransaction.create(
-            chain_id=chain_id,
-            nonce=nonce,
-            gas_limit=BASE_GAS_LIMIT,
-            max_fee_per_gas=max_fee,
-            max_priority_fee_per_gas=priority_fee,
-            fee_token=BETA_USD,
-            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
-        )
-        signed = tx.sign(funded_account.key.hex())
-        receipt = send_tx(w3, signed)
-        assert receipt["status"] == 1
 
 
 class TestTwoNonces:
