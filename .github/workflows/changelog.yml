@@ -2,21 +2,25 @@ name: Changelog
 
 on:
   pull_request:
-    types: [opened]
+    types: [opened, reopened, synchronize]
 
 jobs:
   changelog:
-    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-latest
     permissions:
       contents: write
       pull-requests: write
     steps:
+      - name: Skip changelog generation
+        if: github.event.pull_request.head.repo.full_name != github.repository || github.event.pull_request.user.login == 'dependabot[bot]'
+        run: echo "Changelog generation is unavailable for fork and Dependabot pull requests"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]'
         with:
           fetch-depth: 0
           ref: ${{ github.head_ref }}
       - name: Install changelogs
+        if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]'
         run: |
           VERSION="0.6.3"
           EXPECTED_SHA="d4168ee68b612224a26a39e86bfd2c923ac3dd2de12ee43d2bb65a5ea19df6b6"
@@ -24,8 +28,10 @@ jobs:
           echo "${EXPECTED_SHA}  /usr/local/bin/changelogs" | sha256sum -c -
           chmod +x /usr/local/bin/changelogs
       - name: Install Claude CLI
+        if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]'
         run: npm install -g @anthropic-ai/claude-code@2.1.96
       - name: Generate changelog
+        if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           BASE_REF: ${{ github.base_ref }}
@@ -38,6 +44,7 @@ jobs:
           fi
           changelogs add --ecosystem python --ai "claude -p" --ref origin/"$BASE_REF"
       - name: Commit changelog
+        if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]'
         run: |
           if [ -n "$(git status --porcelain .changelog/)" ]; then
             git config user.name "github-actions[bot]"
