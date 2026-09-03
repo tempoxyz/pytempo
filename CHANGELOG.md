@@ -1,5 +1,49 @@
 # Changelog
 
+## 0.6.0 (2026-09-03)
+
+### Minor Changes
+
+- Add T5 hardfork contract bindings, including refreshed ABIs, AccountKeychain helpers, TIP20 role/admin/reward controls, and stricter ABI response decoding. (by @Mablr, [#56](https://github.com/tempoxyz/pytempo/pull/56))
+- Add T6 contract bindings: TIP-1028 receive policies (`TIP403Registry`
+- receive-policy helpers and `ReceivePolicyGuard`) and the TIP-1020
+- `SignatureVerifier` precompile, along with their precompile addresses and
+- refreshed ABIs. (by @stevencartavia, [#60](https://github.com/tempoxyz/pytempo/pull/60))
+- Support the T6 (TIP-1049) `KeyAuthorization` wire format: encode and decode the
+- new `is_admin` and `account` fields (plus the trailing `witness` field) using the
+- trailing-canonical RLP layout. Adds admin-key validation, canonical-RLP decoding
+- (`KeyAuthorization.decode` / `SignedKeyAuthorization.decode`), and `to_json`
+- support. `expiry=0` is now rejected — use `None` for "never expires". (by @stevencartavia, [#59](https://github.com/tempoxyz/pytempo/pull/59))
+- Expose the T6 (TIP-1049) stateful keychain signature checks on the
+- `SignatureVerifier` precompile binding: `verify_keychain(account, hash, signature)`
+- and `verify_keychain_admin(account, hash, signature)`. Bumped the vendored
+- `tempo-std` ABI ref to pick up the `verifyKeychain` / `verifyKeychainAdmin`
+- additions to `ISignatureVerifier`. (by @stevencartavia, [#62](https://github.com/tempoxyz/pytempo/pull/62))
+- Add the `StablecoinDEX.storage_credits(w3, user=...)` view (TIP-1064) to query a
+- maker's reusable order-storage credit balance on the Stablecoin DEX. (by @stevencartavia, [#65](https://github.com/tempoxyz/pytempo/pull/65))
+- Add T7 StorageCredits precompile bindings (TIP-1060): the `StorageCredits`
+- helper with `set_mode`/`set_budget` call builders and `balance_of`/`mode_of`/
+- `budget_of` views, the `StorageCreditMode` enum, the `STORAGE_CREDITS_ADDRESS`
+- precompile address, and the `IStorageCredits` ABI. (by @stevencartavia, [#64](https://github.com/tempoxyz/pytempo/pull/64))
+- Add T8 `CurrentCommittee` bindings, including the precompile address, ABI, and
+- typed `get_committee_members` read helper. (by @stevencartavia, [#67](https://github.com/tempoxyz/pytempo/pull/67))
+- Exposed the Tempo transaction signing preimage via `TempoTransaction.encode_for_signing()`, allowing callers to access the exact byte sequence that is hashed for signing. Refactored internal `_signing_hash_*` methods into `_encode_for_*_signing()` helpers and added tests verifying the preimage matches the signing hash. (by @ParvAhuja, [#69](https://github.com/tempoxyz/pytempo/pull/69))
+- Add scalar view helpers to `TIP20`: `balance_of`, `allowance`, `total_supply`,
+- `decimals`, `supply_cap`, and `paused`. These mirror the existing role query
+- helpers, returning decoded Python values from a single `eth_call`. (by @Devorun, [#75](https://github.com/tempoxyz/pytempo/pull/75))
+
+### Patch Changes
+
+- Updated the fee token integration test to use genesis-seeded FeeAMM liquidity, consolidating two tests into one and removing the liquidity minting step. (by @DerekCofausper, [#87](https://github.com/tempoxyz/pytempo/pull/87))
+- Update the fee token integration test to use genesis-seeded FeeAMM liquidity. (by @DerekCofausper, [#87](https://github.com/tempoxyz/pytempo/pull/87))
+- Document T7 changes: mark the TIP-20 reward builders `distribute_reward` and
+- `set_reward_recipient` as deprecated (TIP-1075 — post-T7 no-ops). `claim_rewards`
+- stays valid: it still checkpoints and settles pre-T7 lazy accruals through T7,
+- and pays only already-settled balances from the T8 cleanup fork. Also note the
+- dynamic base fee (TIP-1067) so `max_fee_per_gas` should come from a live estimate
+- rather than a constant. (by @stevencartavia, [#66](https://github.com/tempoxyz/pytempo/pull/66))
+- Updated live keychain integration coverage to use transaction-embedded authorization on TIP-1099 networks. (by @DerekCofausper, [#85](https://github.com/tempoxyz/pytempo/pull/85))
+
 ## 0.5.1 (2026-04-24)
 
 ### Patch Changes
