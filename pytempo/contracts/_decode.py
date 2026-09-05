@@ -35,8 +35,18 @@ def decode_bool(result: bytes, name: str) -> bool:
 
 
 def decode_address(result: bytes, name: str) -> str:
-    """Decode an address encoded in a single ABI word."""
-    return to_checksum_address(decode_word(result, name)[-20:])
+    """Decode an address encoded in a single ABI word.
+
+    A canonical ABI address word left-pads the 20-byte address with 12 zero
+    bytes; reject non-zero upper bytes rather than silently discarding them, so
+    a malformed response is not accepted as a valid address.
+    """
+    word = decode_word(result, name)
+    if word[:12] != b"\x00" * 12:
+        raise ValueError(
+            f"{name} result has non-zero upper bytes for a 20-byte address"
+        )
+    return to_checksum_address(word[-20:])
 
 
 def decode_hash32(result: bytes, name: str) -> bytes:
