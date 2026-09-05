@@ -1451,6 +1451,23 @@ class TestKeyRestrictionsIsCallAllowed:
         input_bad.extend(b"\x00" * 32)
         assert not r.is_call_allowed(token, bytes(input_bad))
 
+    def test_recipient_word_dirty_upper_bytes_denied(self):
+        # The recipient word must be a clean ABI-encoded address: the upper 12
+        # bytes must be zero.  tempo_alloy's call_scopes_allow and the on-chain
+        # precompile both reject a word with non-zero upper bytes even when the
+        # low 20 bytes match an allowed recipient, so pytempo must too.
+        token = ALPHA_USD
+        allowed = "0x" + "44" * 20
+        r = KeyRestrictions(
+            allowed_calls=[CallScope.transfer(target=token, recipients=[allowed])],
+        )
+        input_dirty = bytearray()
+        input_dirty.extend(_TRANSFER_SELECTOR)
+        input_dirty.extend(b"\x00" * 11 + b"\x01")  # non-zero upper byte
+        input_dirty.extend(bytes.fromhex("44" * 20))  # allowed recipient (low 20 bytes)
+        input_dirty.extend(b"\x00" * 32)
+        assert not r.is_call_allowed(token, bytes(input_dirty))
+
     def test_recipient_word_too_short(self):
         token = ALPHA_USD
         allowed = "0x" + "44" * 20
