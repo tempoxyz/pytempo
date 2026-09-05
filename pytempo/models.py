@@ -32,7 +32,10 @@ def _validate_call_value(
 
 @attrs.define(frozen=True)
 class Call:
-    """Single call in a batch transaction."""
+    """Single call in a batch transaction.
+
+    Tempo does not support native ETH value transfers; keep ``value=0`` in examples.
+    """
 
     to: Address = attrs.field(converter=as_address)
     value: int = attrs.field(default=0, validator=_validate_call_value)
@@ -191,7 +194,7 @@ class TempoTransaction:
             chain_id=42429,
             gas_limit=100_000,
             max_fee_per_gas=2_000_000_000,
-            calls=(Call.create(to="0xRecipient...", value=1000),),
+            calls=(Call.create(to="0xRecipient...", value=0),),
         )
         signed_tx = tx.sign("0xPrivateKey...")
     """

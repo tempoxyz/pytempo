@@ -32,7 +32,7 @@ tx = TempoTransaction.create(
     max_priority_fee_per_gas=1_000_000_000,
     nonce=0,
     fee_token=ALPHA_USD,
-    calls=(Call.create(to="0xRecipient...", value=1000),),
+    calls=(Call.create(to="0xRecipient...", value=0),),
 )
 signed_tx = tx.sign("0xYourPrivateKey...")
 tx_hash = w3.eth.send_raw_transaction(signed_tx.encode())

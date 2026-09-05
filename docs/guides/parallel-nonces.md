@@ -14,7 +14,7 @@ tx1 = TempoTransaction.create(
     max_fee_per_gas=2_000_000_000,
     nonce=0,
     nonce_key=1,
-    calls=(Call.create(to="0xRecipient...", value=1000),),
+    calls=(Call.create(to="0xRecipient...", value=0),),
 )
 
 tx2 = TempoTransaction.create(

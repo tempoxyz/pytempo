@@ -77,7 +77,7 @@ tx = TempoTransaction.create(
     max_fee_per_gas=2_000_000_000,
     max_priority_fee_per_gas=1_000_000_000,
     nonce=0,
-    calls=(Call.create(to="0xRecipient...", value=1000),),
+    calls=(Call.create(to="0xRecipient...", value=0),),
 )
 signed_tx = tx.sign("0xYourPrivateKey...")
 tx_hash = w3.eth.send_raw_transaction(signed_tx.encode())
@@ -93,7 +93,7 @@ tx = TempoTransaction.create(
     gas_limit=100_000,
     max_fee_per_gas=2_000_000_000,
     fee_token=BETA_USD,
-    calls=(Call.create(to="0xRecipient...", value=1000),),
+    calls=(Call.create(to="0xRecipient...", value=0),),
 )
 ```
 
@@ -108,7 +108,7 @@ tx = TempoTransaction.create(
     gas_limit=100_000,
     max_fee_per_gas=2_000_000_000,
     awaiting_fee_payer=True,
-    calls=(Call.create(to="0xRecipient...", value=1000),),
+    calls=(Call.create(to="0xRecipient...", value=0),),
 )
 signed_tx = tx.sign("0xUserPrivateKey...")
 
@@ -128,7 +128,7 @@ tx = TempoTransaction.create(
     gas_limit=200_000,
     max_fee_per_gas=2_000_000_000,
     calls=(
-        Call.create(to="0xAddress1...", value=100000),
+        Call.create(to="0xAddress1...", value=0),
         Call.create(to="0xAddress2...", value=200000, data="0xabcdef"),
     ),
 )
@@ -255,7 +255,7 @@ Immutable, strongly-typed transaction (frozen attrs model).
 
 Single call in a batch transaction.
 
-- `Call.create(to, value=0, data=b"")` - Create with type coercion
+- `Call.create(to, value=0, data=b"")` - Create with type coercion (Tempo has no native ETH transfers; keep `value=0`)
 
 ### `AccessListItem`
 

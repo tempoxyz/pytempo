@@ -20,7 +20,7 @@ tx = TempoTransaction.create(
     max_fee_per_gas=2_000_000_000,
     fee_token="0xTokenAddress...",
     awaiting_fee_payer=True,
-    calls=(Call.create(to="0xRecipient...", value=1000),),
+    calls=(Call.create(to="0xRecipient...", value=0),),
 )
 signed_by_sender = tx.sign("0xSenderPrivateKey...")
 
