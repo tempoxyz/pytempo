@@ -33,7 +33,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: true
 
-      - uses: tempoxyz/changelogs@a19f62e3fdbd6d07b8900eb0568ed09b868bf84d # OIDC trusted publishing
+      - uses: tempoxyz/changelogs@7c6208cf69e62cb5448567a3c94e9688020285e1 # OIDC trusted publishing
         with:
           ecosystem: python
           python-version: '3.12'
