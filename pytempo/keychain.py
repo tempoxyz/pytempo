@@ -403,8 +403,9 @@ class KeyRestrictions:
         3. Scope has no selector rules → any call to that target is allowed.
         4. Selector not in rules → denied.
         5. Rule has no recipients → any recipient is allowed.
-        6. Otherwise the first ABI word after the selector must match an
-           allowed recipient.
+        6. Otherwise the first ABI word after the selector must be a clean
+           ABI-encoded address (upper 12 bytes zero) matching an allowed
+           recipient.
         """
         if self.allowed_calls is None:
             return True
@@ -440,6 +441,14 @@ class KeyRestrictions:
             return False
 
         word = input_data[4:36]
+        # Recipient-constrained selectors only permit a clean ABI-encoded
+        # address: the upper 12 bytes of the word must be zero.  This mirrors
+        # tempo_alloy's ``call_scopes_allow`` and the on-chain precompile, both
+        # of which reject a word with dirty upper bytes before comparing the
+        # recipient.  Without this guard pytempo would report a call as allowed
+        # that the chain rejects.
+        if any(word[:12]):
+            return False
         recipient = as_address(word[12:])
         return recipient in rule.recipients
 
