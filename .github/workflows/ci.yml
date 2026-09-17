@@ -129,7 +129,9 @@ jobs:
 
       - name: Check package
         run: |
-          uv run pip install dist/*.whl
+          # `uv run` has already synchronized the locked project environment;
+          # avoid resolving newer transitive releases outside that lock here.
+          uv run pip install --no-deps dist/*.whl
           uv run python -c "import pytempo; print(pytempo.__version__)"
 
   integration-localnet:
