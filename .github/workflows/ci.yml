@@ -54,7 +54,7 @@ jobs:
       - name: Install uv
         uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@487be2d19b0ba9ae1903143016444ab752c3e939
         with:
-          version: "0.7.12"
+          version: "0.12.11"
 
       - name: Set up Python
         run: uv python install 3.11
@@ -87,7 +87,7 @@ jobs:
       - name: Install uv
         uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@487be2d19b0ba9ae1903143016444ab752c3e939
         with:
-          version: "0.7.12"
+          version: "0.12.11"
 
       - name: Set up Python ${{ matrix.python-version }}
         run: uv python install ${{ matrix.python-version }}
@@ -114,7 +114,7 @@ jobs:
       - name: Install uv
         uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@487be2d19b0ba9ae1903143016444ab752c3e939
         with:
-          version: "0.7.12"
+          version: "0.12.11"
 
       - name: Set up Python
         run: uv python install 3.11
@@ -145,7 +145,7 @@ jobs:
       - name: Install uv
         uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@487be2d19b0ba9ae1903143016444ab752c3e939
         with:
-          version: "0.7.12"
+          version: "0.12.11"
 
       - name: Set up Python
         run: uv python install 3.11
@@ -209,7 +209,7 @@ jobs:
       - name: Install uv
         uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@487be2d19b0ba9ae1903143016444ab752c3e939
         with:
-          version: "0.7.12"
+          version: "0.12.11"
 
       - name: Set up Python
         run: uv python install 3.11
@@ -240,7 +240,7 @@ jobs:
       - name: Install uv
         uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@487be2d19b0ba9ae1903143016444ab752c3e939
         with:
-          version: "0.7.12"
+          version: "0.12.11"
 
       - name: Set up Python
         run: uv python install 3.11
