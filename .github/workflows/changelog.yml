@@ -10,11 +10,15 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
       pull-requests: write
     steps:
+      - name: Secure runner
+        uses: tempoxyz/gh-actions/actions/secure-runner@05c669ce878b8719779a28fe7375ba85822403f8
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
           ref: ${{ github.head_ref }}
       - name: Install changelogs
         run: |
@@ -24,7 +28,7 @@ jobs:
           echo "${EXPECTED_SHA}  /usr/local/bin/changelogs" | sha256sum -c -
           chmod +x /usr/local/bin/changelogs
       - name: Install Claude CLI
-        run: npm install -g @anthropic-ai/claude-code@2.1.96
+        run: npm install -g @anthropic-ai/claude-code@2.1.96 # zizmor: ignore[adhoc-packages] Exact version is intentional for this global CLI.
       - name: Generate changelog
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -38,11 +42,14 @@ jobs:
           fi
           changelogs add --ecosystem python --ai "claude -p" --ref origin/"$BASE_REF"
       - name: Commit changelog
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           if [ -n "$(git status --porcelain .changelog/)" ]; then
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
             git add .changelog/
             git commit -m "chore: add changelog"
+            gh auth setup-git
             git push
           fi
