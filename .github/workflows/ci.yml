@@ -26,7 +26,7 @@ jobs:
       id-token: write
     steps:
       - name: Secure runner
-        uses: tempoxyz/gh-actions/actions/secure-runner@05c669ce878b8719779a28fe7375ba85822403f8
+        uses: tempoxyz/gh-actions/actions/secure-runner@0a60d757d0f4725a34f22f7b9ebf7b91b4b00bcf
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -51,13 +51,13 @@ jobs:
       id-token: write
     steps:
       - name: Secure runner
-        uses: tempoxyz/gh-actions/actions/secure-runner@05c669ce878b8719779a28fe7375ba85822403f8
+        uses: tempoxyz/gh-actions/actions/secure-runner@0a60d757d0f4725a34f22f7b9ebf7b91b4b00bcf
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Install uv
-        uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@487be2d19b0ba9ae1903143016444ab752c3e939
+        uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@0a60d757d0f4725a34f22f7b9ebf7b91b4b00bcf
         with:
           version: "0.12.11"
 
@@ -84,13 +84,13 @@ jobs:
       id-token: write
     steps:
       - name: Secure runner
-        uses: tempoxyz/gh-actions/actions/secure-runner@05c669ce878b8719779a28fe7375ba85822403f8
+        uses: tempoxyz/gh-actions/actions/secure-runner@0a60d757d0f4725a34f22f7b9ebf7b91b4b00bcf
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Install uv
-        uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@487be2d19b0ba9ae1903143016444ab752c3e939
+        uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@0a60d757d0f4725a34f22f7b9ebf7b91b4b00bcf
         with:
           version: "0.12.11"
 
@@ -111,13 +111,13 @@ jobs:
       id-token: write
     steps:
       - name: Secure runner
-        uses: tempoxyz/gh-actions/actions/secure-runner@05c669ce878b8719779a28fe7375ba85822403f8
+        uses: tempoxyz/gh-actions/actions/secure-runner@0a60d757d0f4725a34f22f7b9ebf7b91b4b00bcf
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Install uv
-        uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@487be2d19b0ba9ae1903143016444ab752c3e939
+        uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@0a60d757d0f4725a34f22f7b9ebf7b91b4b00bcf
         with:
           version: "0.12.11"
 
@@ -144,13 +144,13 @@ jobs:
 
     steps:
       - name: Secure runner
-        uses: tempoxyz/gh-actions/actions/secure-runner@05c669ce878b8719779a28fe7375ba85822403f8
+        uses: tempoxyz/gh-actions/actions/secure-runner@0a60d757d0f4725a34f22f7b9ebf7b91b4b00bcf
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Install uv
-        uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@487be2d19b0ba9ae1903143016444ab752c3e939
+        uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@0a60d757d0f4725a34f22f7b9ebf7b91b4b00bcf
         with:
           version: "0.12.11"
 
@@ -208,13 +208,13 @@ jobs:
 
     steps:
       - name: Secure runner
-        uses: tempoxyz/gh-actions/actions/secure-runner@05c669ce878b8719779a28fe7375ba85822403f8
+        uses: tempoxyz/gh-actions/actions/secure-runner@0a60d757d0f4725a34f22f7b9ebf7b91b4b00bcf
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Install uv
-        uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@487be2d19b0ba9ae1903143016444ab752c3e939
+        uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@0a60d757d0f4725a34f22f7b9ebf7b91b4b00bcf
         with:
           version: "0.12.11"
 
@@ -239,13 +239,13 @@ jobs:
 
     steps:
       - name: Secure runner
-        uses: tempoxyz/gh-actions/actions/secure-runner@05c669ce878b8719779a28fe7375ba85822403f8
+        uses: tempoxyz/gh-actions/actions/secure-runner@0a60d757d0f4725a34f22f7b9ebf7b91b4b00bcf
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Install uv
-        uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@487be2d19b0ba9ae1903143016444ab752c3e939
+        uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@0a60d757d0f4725a34f22f7b9ebf7b91b4b00bcf
         with:
           version: "0.12.11"
 
