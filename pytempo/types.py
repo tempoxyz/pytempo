@@ -14,6 +14,22 @@ Selector = NewType("Selector", bytes)
 BytesLike = Union[bytes, str]
 
 
+def _hex_to_bytes(value: str) -> bytes:
+    """Decode a hex string, rejecting an odd number of hex digits.
+
+    ``eth_utils.to_bytes`` left-pads an odd-length hex string with a zero
+    nibble, so ``"0x" + "a" * 39`` decodes to 20 bytes and passes a length
+    check with every byte shifted. Reject it instead, so a truncated value is
+    not accepted as a different, well-formed one.
+    """
+    digits = value[2:] if value[:2].lower() == "0x" else value
+    if len(digits) % 2:
+        raise ValueError(
+            f"hex string must have an even number of digits, got {len(digits)}"
+        )
+    return to_bytes(hexstr=value)
+
+
 def as_bytes(value: BytesLike) -> bytes:
     """Convert hex string, bytes, bytearray, or memoryview to bytes.
 
@@ -21,11 +37,12 @@ def as_bytes(value: BytesLike) -> bytes:
 
     Raises:
         TypeError: If value is not a string or bytes-like object (rejects int).
+        ValueError: If the hex string has an odd number of digits.
     """
     if isinstance(value, str):
         if value == "" or value == "0x":
             return b""
-        return to_bytes(hexstr=value)
+        return _hex_to_bytes(value)
     if isinstance(value, (bytes, bytearray, memoryview)):
         return bytes(value)
     raise TypeError(
@@ -40,12 +57,13 @@ def as_address(value: BytesLike) -> Address:
 
     Raises:
         TypeError: If value is not a string or bytes-like object (rejects int).
-        ValueError: If address is not 0 or 20 bytes.
+        ValueError: If the hex string has an odd number of digits, or the
+            address is not 0 or 20 bytes.
     """
     if isinstance(value, str):
         if value == "" or value == "0x":
             return Address(b"")
-        b = to_bytes(hexstr=value)
+        b = _hex_to_bytes(value)
     elif isinstance(value, (bytes, bytearray, memoryview)):
         b = bytes(value)
     else:
@@ -78,10 +96,11 @@ def as_hash32(value: BytesLike) -> Hash32:
 
     Raises:
         TypeError: If value is not a string or bytes-like object (rejects int).
-        ValueError: If hash is not exactly 32 bytes.
+        ValueError: If the hex string has an odd number of digits, or the hash
+            is not exactly 32 bytes.
     """
     if isinstance(value, str):
-        b = to_bytes(hexstr=value)
+        b = _hex_to_bytes(value)
     elif isinstance(value, (bytes, bytearray, memoryview)):
         b = bytes(value)
     else:
@@ -101,7 +120,8 @@ def as_selector(value: BytesLike) -> Selector:
 
     Raises:
         TypeError: If value is not a string or bytes-like object (rejects int).
-        ValueError: If selector is not exactly 4 bytes.
+        ValueError: If the hex string has an odd number of digits, or the
+            selector is not exactly 4 bytes.
     """
     b = as_bytes(value)
     if len(b) != 4:
