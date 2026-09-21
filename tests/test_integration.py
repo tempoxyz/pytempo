@@ -50,8 +50,8 @@ from pytempo.contracts import (
 BASE_GAS_LIMIT = 300_000
 HIGH_GAS_LIMIT = 500_000
 
-# Test-specific contract addresses
-COUNTER_CONTRACT = "0x86A2EE8FAf9A840F7a2c64CA3d51209F9A02081D"
+# Placeholder destination for offline transaction tests only.
+TEST_ADDRESS = "0x0000000000000000000000000000000000001234"
 COUNTER_INCREMENT = bytes.fromhex("d09de08a")  # increment() selector
 
 # Skip all tests if TEMPO_RPC_URL is not set
@@ -127,6 +127,38 @@ def sponsor_account(w3, rpc_url):
         time.sleep(0.2)
 
     return account
+
+
+@pytest.fixture(scope="module")
+def counter_contract(w3, chain_id, sponsor_account):
+    """Deploy an isolated counter instead of relying on a network-specific address."""
+    # Runtime: PUSH1 0; SLOAD; PUSH1 1; ADD; PUSH1 0; SSTORE; STOP.
+    # Every call increments storage slot 0, including increment() calls below.
+    runtime = bytes.fromhex("60005460010160005500")
+    # Initialize slot 0 to 1 during deployment, whose gas is estimated below.
+    # This keeps new-storage allocation costs out of the fixed-gas smoke tests.
+    # Then copy the 10-byte runtime from offset 17 into memory and return it.
+    init_code = bytes.fromhex("6001600055600a6011600039600a6000f3") + runtime
+    max_fee, priority_fee = get_gas_params(w3)
+    transaction = {
+        "chainId": chain_id,
+        "nonce": w3.eth.get_transaction_count(sponsor_account.address),
+        "maxFeePerGas": max_fee,
+        "maxPriorityFeePerGas": priority_fee,
+        "data": init_code,
+    }
+    transaction["gas"] = w3.eth.estimate_gas(
+        {**transaction, "from": sponsor_account.address}
+    )
+    signed = sponsor_account.sign_transaction(transaction)
+    tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
+    receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=60)
+    assert receipt["status"] == 1, format_receipt(receipt)
+    address = receipt["contractAddress"]
+    assert address is not None
+    wait_for_next_block(w3)
+    assert w3.eth.get_code(address) == runtime
+    return address
 
 
 def format_receipt(receipt: dict) -> str:
@@ -217,7 +249,7 @@ class TestTransactionCreation:
             gas_limit=BASE_GAS_LIMIT,
             max_fee_per_gas=2_000_000_000,
             max_priority_fee_per_gas=1_000_000_000,
-            calls=(Call.create(to=COUNTER_CONTRACT, value=0),),
+            calls=(Call.create(to=TEST_ADDRESS, value=0),),
         )
         assert tx is not None
         assert tx.chain_id == chain_id
@@ -230,7 +262,7 @@ class TestTransactionCreation:
             gas_limit=BASE_GAS_LIMIT,
             max_fee_per_gas=2_000_000_000,
             max_priority_fee_per_gas=1_000_000_000,
-            calls=(Call.create(to=COUNTER_CONTRACT, value=0),),
+            calls=(Call.create(to=TEST_ADDRESS, value=0),),
         )
         signed = tx.sign(account.key.hex())
         assert signed.sender_signature is not None
@@ -243,7 +275,7 @@ class TestTransactionCreation:
             gas_limit=BASE_GAS_LIMIT,
             max_fee_per_gas=2_000_000_000,
             max_priority_fee_per_gas=1_000_000_000,
-            calls=(Call.create(to=COUNTER_CONTRACT, value=0),),
+            calls=(Call.create(to=TEST_ADDRESS, value=0),),
         )
         signed = tx.sign(account.key.hex())
         encoded = signed.encode()
@@ -255,7 +287,9 @@ class TestTransactionCreation:
 class TestTransactionSubmission:
     """Test submitting transactions to the network."""
 
-    def test_send_simple_transaction(self, w3, chain_id, funded_account):
+    def test_send_simple_transaction(
+        self, w3, chain_id, funded_account, counter_contract
+    ):
         """Test sending a simple transaction."""
         max_fee, priority_fee = get_gas_params(w3)
         nonce = w3.eth.get_transaction_count(funded_account.address)
@@ -266,7 +300,7 @@ class TestTransactionSubmission:
             gas_limit=BASE_GAS_LIMIT,
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
-            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
+            calls=(Call.create(to=counter_contract, data=COUNTER_INCREMENT),),
         )
         signed = tx.sign(funded_account.key.hex())
         receipt = send_tx(w3, signed)
@@ -331,7 +365,7 @@ class TestT8Smoke:
 class TestFeeTokens:
     """Test fee token operations (tempo-check.sh fee token tests)."""
 
-    def test_send_with_fee_tokens(self, w3, chain_id, funded_account):
+    def test_send_with_fee_tokens(self, w3, chain_id, funded_account, counter_contract):
         """Test transactions using genesis-seeded fee token liquidity."""
         max_fee, priority_fee = get_gas_params(w3)
 
@@ -345,7 +379,7 @@ class TestFeeTokens:
                 max_fee_per_gas=max_fee,
                 max_priority_fee_per_gas=priority_fee,
                 fee_token=token,
-                calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
+                calls=(Call.create(to=counter_contract, data=COUNTER_INCREMENT),),
             )
             signed = tx.sign(funded_account.key.hex())
             receipt = send_tx(w3, signed)
@@ -355,7 +389,7 @@ class TestFeeTokens:
 class TestTwoNonces:
     """Test 2D nonce system (nonce_key for parallel transactions)."""
 
-    def test_send_with_nonce_key(self, w3, chain_id, funded_account):
+    def test_send_with_nonce_key(self, w3, chain_id, funded_account, counter_contract):
         """Test sending transaction with nonce_key (2D nonce)."""
         max_fee, priority_fee = get_gas_params(w3)
 
@@ -366,7 +400,7 @@ class TestTwoNonces:
             gas_limit=BASE_GAS_LIMIT,
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
-            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
+            calls=(Call.create(to=counter_contract, data=COUNTER_INCREMENT),),
         )
         signed = tx.sign(funded_account.key.hex())
         receipt = send_tx(w3, signed)
@@ -376,7 +410,9 @@ class TestTwoNonces:
 class TestExpiringNonces:
     """Test expiring nonces (valid_before, valid_after)."""
 
-    def test_send_with_valid_before(self, w3, chain_id, funded_account):
+    def test_send_with_valid_before(
+        self, w3, chain_id, funded_account, counter_contract
+    ):
         """Test sending transaction with valid_before (expiring nonce)."""
         max_fee, priority_fee = get_gas_params(w3)
 
@@ -390,13 +426,15 @@ class TestExpiringNonces:
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
             valid_before=valid_before,
-            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
+            calls=(Call.create(to=counter_contract, data=COUNTER_INCREMENT),),
         )
         signed = tx.sign(funded_account.key.hex())
         receipt = send_tx(w3, signed)
         assert receipt["status"] == 1
 
-    def test_send_with_valid_after(self, w3, chain_id, funded_account):
+    def test_send_with_valid_after(
+        self, w3, chain_id, funded_account, counter_contract
+    ):
         """Test sending transaction with valid_after (scheduled)."""
         max_fee, priority_fee = get_gas_params(w3)
 
@@ -412,7 +450,7 @@ class TestExpiringNonces:
             max_priority_fee_per_gas=priority_fee,
             valid_after=valid_after,
             valid_before=valid_before,
-            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
+            calls=(Call.create(to=counter_contract, data=COUNTER_INCREMENT),),
         )
         signed = tx.sign(funded_account.key.hex())
         receipt = send_tx(w3, signed)
@@ -426,7 +464,9 @@ class TestAccessKeys:
     inline within a transaction, avoiding a separate on-chain authorizeKey call.
     """
 
-    def test_add_access_key_with_key_authorization(self, w3, chain_id, funded_account):
+    def test_add_access_key_with_key_authorization(
+        self, w3, chain_id, funded_account, counter_contract
+    ):
         """Test adding a new access key via inline KeyAuthorization.
 
         Uses KeyAuthorization to provision an access key in the same transaction
@@ -455,7 +495,7 @@ class TestAccessKeys:
             gas_limit=0,  # Placeholder
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
-            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
+            calls=(Call.create(to=counter_contract, data=COUNTER_INCREMENT),),
             key_authorization=signed_auth,
         )
 
@@ -476,7 +516,7 @@ class TestAccessKeys:
             gas_limit=gas_estimate,
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
-            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
+            calls=(Call.create(to=counter_contract, data=COUNTER_INCREMENT),),
             key_authorization=signed_auth,
         )
 
@@ -487,7 +527,9 @@ class TestAccessKeys:
         receipt = send_tx(w3, signed_tx)
         assert receipt["status"] == 1
 
-    def test_sign_tx_with_existing_access_key(self, w3, chain_id, funded_account):
+    def test_sign_tx_with_existing_access_key(
+        self, w3, chain_id, funded_account, counter_contract
+    ):
         """Test signing a transaction with an already-authorized access key.
 
         First provisions the access key inline, then uses that same key
@@ -519,7 +561,7 @@ class TestAccessKeys:
             gas_limit=0,  # Placeholder
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
-            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
+            calls=(Call.create(to=counter_contract, data=COUNTER_INCREMENT),),
             key_authorization=signed_auth,
         )
 
@@ -540,7 +582,7 @@ class TestAccessKeys:
             gas_limit=gas_estimate_with_auth,
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
-            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
+            calls=(Call.create(to=counter_contract, data=COUNTER_INCREMENT),),
             key_authorization=signed_auth,
         )
 
@@ -563,7 +605,7 @@ class TestAccessKeys:
             gas_limit=0,  # Placeholder
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
-            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
+            calls=(Call.create(to=counter_contract, data=COUNTER_INCREMENT),),
         )
 
         gas_estimate_no_auth = w3.eth.estimate_gas(
@@ -579,7 +621,7 @@ class TestAccessKeys:
             gas_limit=gas_estimate_no_auth,
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
-            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
+            calls=(Call.create(to=counter_contract, data=COUNTER_INCREMENT),),
         )
 
         signed_tx2 = tx2.sign_access_key(
@@ -593,7 +635,9 @@ class TestAccessKeys:
 class TestSponsoredTransactions:
     """Test sponsored (gasless) transactions (from PR #214)."""
 
-    def test_sponsored_transaction(self, w3, chain_id, funded_account, sponsor_account):
+    def test_sponsored_transaction(
+        self, w3, chain_id, funded_account, counter_contract, sponsor_account
+    ):
         """Test sending a sponsored transaction where sponsor pays gas."""
         max_fee, priority_fee = get_gas_params(w3)
 
@@ -605,7 +649,7 @@ class TestSponsoredTransactions:
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
             awaiting_fee_payer=True,
-            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
+            calls=(Call.create(to=counter_contract, data=COUNTER_INCREMENT),),
         )
 
         sender_signed = tx.sign(funded_account.key.hex())
@@ -623,11 +667,13 @@ class TestSponsoredTransactions:
 class TestBatchTransactions:
     """Test batch transactions (multiple calls in one tx)."""
 
-    def test_batch_transaction(self, w3, chain_id, funded_account):
+    def test_batch_transaction(self, w3, chain_id, funded_account, counter_contract):
         """Test sending a batch transaction with multiple calls."""
         max_fee, priority_fee = get_gas_params(w3)
         nonce = w3.eth.get_transaction_count(funded_account.address)
 
+        before = int.from_bytes(w3.eth.get_storage_at(counter_contract, 0), "big")
+
         tx = TempoTransaction.create(
             chain_id=chain_id,
             nonce=nonce,
@@ -635,19 +681,26 @@ class TestBatchTransactions:
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
             calls=(
-                Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),
-                Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),
+                Call.create(to=counter_contract, data=COUNTER_INCREMENT),
+                Call.create(to=counter_contract, data=COUNTER_INCREMENT),
             ),
         )
         signed = tx.sign(funded_account.key.hex())
         receipt = send_tx(w3, signed)
         assert receipt["status"] == 1
+        wait_for_next_block(w3)
+        after = int.from_bytes(
+            w3.eth.get_storage_at(counter_contract, 0, receipt["blockNumber"]), "big"
+        )
+        assert after == before + 2
 
-    def test_batch_three_calls(self, w3, chain_id, funded_account):
+    def test_batch_three_calls(self, w3, chain_id, funded_account, counter_contract):
         """Test batch transaction with three calls."""
         max_fee, priority_fee = get_gas_params(w3)
         nonce = w3.eth.get_transaction_count(funded_account.address)
 
+        before = int.from_bytes(w3.eth.get_storage_at(counter_contract, 0), "big")
+
         tx = TempoTransaction.create(
             chain_id=chain_id,
             nonce=nonce,
@@ -655,14 +708,19 @@ class TestBatchTransactions:
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
             calls=(
-                Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),
-                Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),
-                Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),
+                Call.create(to=counter_contract, data=COUNTER_INCREMENT),
+                Call.create(to=counter_contract, data=COUNTER_INCREMENT),
+                Call.create(to=counter_contract, data=COUNTER_INCREMENT),
             ),
         )
         signed = tx.sign(funded_account.key.hex())
         receipt = send_tx(w3, signed)
         assert receipt["status"] == 1
+        wait_for_next_block(w3)
+        after = int.from_bytes(
+            w3.eth.get_storage_at(counter_contract, 0, receipt["blockNumber"]), "big"
+        )
+        assert after == before + 3
 
 
 class TestDEXOperations:
@@ -958,7 +1016,9 @@ class TestKeyAuthorizationWithLimits:
     TestAccessKeys do not cover (they use limits=None).
     """
 
-    def test_inline_key_auth_with_limits(self, w3, chain_id, funded_account):
+    def test_inline_key_auth_with_limits(
+        self, w3, chain_id, funded_account, counter_contract
+    ):
         """Provision access key with spending limits via key_authorization."""
         max_fee, priority_fee = get_gas_params(w3)
 
@@ -984,7 +1044,7 @@ class TestKeyAuthorizationWithLimits:
             gas_limit=0,
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
-            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
+            calls=(Call.create(to=counter_contract, data=COUNTER_INCREMENT),),
             key_authorization=signed_auth,
         )
 
@@ -1003,7 +1063,7 @@ class TestKeyAuthorizationWithLimits:
             gas_limit=gas_estimate,
             max_fee_per_gas=max_fee,
             max_priority_fee_per_gas=priority_fee,
-            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
+            calls=(Call.create(to=counter_contract, data=COUNTER_INCREMENT),),
             key_authorization=signed_auth,
         )
 
@@ -1043,7 +1103,7 @@ class TestTransactionValidation:
             gas_limit=300_000,
             max_fee_per_gas=2_000_000_000,
             max_priority_fee_per_gas=1_000_000_000,
-            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
+            calls=(Call.create(to=TEST_ADDRESS, data=COUNTER_INCREMENT),),
         )
         tx.validate()
 
@@ -1052,7 +1112,7 @@ class TestTransactionValidation:
         tx = TempoTransaction.create(
             chain_id=chain_id,
             gas_limit=0,
-            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
+            calls=(Call.create(to=TEST_ADDRESS, data=COUNTER_INCREMENT),),
         )
         with pytest.raises(ValueError, match="gas_limit must be > 0"):
             tx.validate()
@@ -1073,7 +1133,7 @@ class TestTransactionValidation:
             gas_limit=300_000,
             max_fee_per_gas=100,
             max_priority_fee_per_gas=200,
-            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
+            calls=(Call.create(to=TEST_ADDRESS, data=COUNTER_INCREMENT),),
         )
         with pytest.raises(ValueError, match="cannot exceed"):
             tx.validate()
@@ -1085,7 +1145,7 @@ class TestTransactionValidation:
             gas_limit=300_000,
             valid_after=2000,
             valid_before=1000,
-            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
+            calls=(Call.create(to=TEST_ADDRESS, data=COUNTER_INCREMENT),),
         )
         with pytest.raises(ValueError, match="valid_after cannot be greater"):
             tx.validate()
@@ -1109,7 +1169,7 @@ class TestEncodingRoundTrip:
             max_priority_fee_per_gas=1_000_000_000,
             calls=(
                 Call.create(
-                    to=COUNTER_CONTRACT,
+                    to=TEST_ADDRESS,
                     value=1000,
                     data=COUNTER_INCREMENT,
                 ),
@@ -1136,7 +1196,7 @@ class TestEncodingRoundTrip:
             gas_limit=300_000,
             max_fee_per_gas=2_000_000_000,
             max_priority_fee_per_gas=1_000_000_000,
-            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
+            calls=(Call.create(to=TEST_ADDRESS, data=COUNTER_INCREMENT),),
         )
 
         signed = tx.sign(account.key.hex())
@@ -1154,9 +1214,9 @@ class TestEncodingRoundTrip:
             max_fee_per_gas=2_000_000_000,
             max_priority_fee_per_gas=1_000_000_000,
             calls=(
-                Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),
-                Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),
-                Call.create(to=COUNTER_CONTRACT, value=100),
+                Call.create(to=TEST_ADDRESS, data=COUNTER_INCREMENT),
+                Call.create(to=TEST_ADDRESS, data=COUNTER_INCREMENT),
+                Call.create(to=TEST_ADDRESS, value=100),
             ),
         )
 
@@ -1179,7 +1239,7 @@ class TestEncodingRoundTrip:
             max_fee_per_gas=2_000_000_000,
             max_priority_fee_per_gas=1_000_000_000,
             awaiting_fee_payer=True,
-            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
+            calls=(Call.create(to=TEST_ADDRESS, data=COUNTER_INCREMENT),),
         )
 
         sender_signed = tx.sign(sender.key.hex())
@@ -1202,7 +1262,7 @@ class TestEncodingRoundTrip:
             gas_limit=300_000,
             max_fee_per_gas=2_000_000_000,
             max_priority_fee_per_gas=1_000_000_000,
-            calls=(Call.create(to=COUNTER_CONTRACT, data=COUNTER_INCREMENT),),
+            calls=(Call.create(to=TEST_ADDRESS, data=COUNTER_INCREMENT),),
         )
 
         signed = tx.sign(account.key.hex())
