@@ -1,0 +1,7 @@
+version: 3
+rules:
+  # This commit predates the repository's release tags; retain its immutable
+  # SHA pin while exempting its descriptive comment from tag verification.
+  - ignore: true
+    conditions:
+      - expr: ActionName == "tempoxyz/changelogs"
