@@ -11,6 +11,7 @@ from pytempo import (
     as_address,
     as_bytes,
     as_hash32,
+    as_selector,
 )
 
 
@@ -58,6 +59,36 @@ class TestTypes:
     def test_as_address_rejects_int(self):
         with pytest.raises(TypeError, match="expected str, bytes"):
             as_address(20)
+
+    def test_as_address_rejects_odd_length_hex(self):
+        # eth_utils.to_bytes left-pads an odd-length hex string with a zero
+        # nibble, so a 39-digit address would decode to 20 bytes and pass the
+        # length check as a different, well-formed address.
+        with pytest.raises(ValueError, match="even number of digits"):
+            as_address("0x" + "a" * 39)
+
+    def test_as_hash32_rejects_odd_length_hex(self):
+        with pytest.raises(ValueError, match="even number of digits"):
+            as_hash32("0x" + "a" * 63)
+
+    def test_as_bytes_rejects_odd_length_hex(self):
+        with pytest.raises(ValueError, match="even number of digits"):
+            as_bytes("0xabc")
+
+    def test_as_selector_rejects_odd_length_hex(self):
+        with pytest.raises(ValueError, match="even number of digits"):
+            as_selector("0x" + "a" * 7)
+
+    def test_odd_length_hex_rejected_without_prefix(self):
+        with pytest.raises(ValueError, match="even number of digits"):
+            as_address("a" * 39)
+
+    def test_even_length_hex_still_accepted(self):
+        # The guard must not disturb canonical input.
+        assert as_address("0x" + "ab" * 20) == bytes.fromhex("ab" * 20)
+        assert as_hash32("0x" + "ab" * 32) == bytes.fromhex("ab" * 32)
+        assert as_selector("0xa9059cbb") == bytes.fromhex("a9059cbb")
+        assert as_bytes("0xabcd") == b"\xab\xcd"
 
     def test_as_hash32_rejects_int(self):
         with pytest.raises(TypeError, match="expected str, bytes"):
