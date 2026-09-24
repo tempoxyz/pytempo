@@ -1,5 +1,5 @@
 ---
-pytempo: patch
+pytempo: minor
 ---
 
-Updated dependencies, bumping `aiohttp` from 3.13.5 to 3.14.3 for Python 3.10+ with version-specific resolution markers.
+Update dependencies. Breaking change: Python 3.10 or newer is now required.

@@ -16,7 +16,7 @@ uv add pytempo
 
 ## Requirements
 
-- Python 3.9+
+- Python 3.10+
 - web3.py 7.0+
 
 ## Your first transaction
