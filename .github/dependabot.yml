@@ -12,14 +12,14 @@ updates:
         patterns: ["*"]
         update-types: ["minor", "patch"]
 
-  - package-ecosystem: "pip"
+  - package-ecosystem: "uv"
     directory: "/"
     schedule:
       interval: "weekly"
     cooldown:
       default-days: 7
     groups:
-      pip-weekly:
+      uv-weekly:
         applies-to: "version-updates"
         patterns: ["*"]
         update-types: ["minor", "patch"]
