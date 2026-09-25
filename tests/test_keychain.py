@@ -1061,6 +1061,19 @@ class TestKeyAuthorizationT6:
         assert "isAdmin" not in j
         assert "account" not in j
 
+    def test_to_json_sends_null_expiry_for_never_expiring_keys(self):
+        auth = KeyAuthorization(key_id=self.KEY_ID, chain_id=7)
+        j = auth.sign("0x" + "a" * 64).to_json()
+        assert "expiry" in j
+        assert j["expiry"] is None
+
+    def test_to_json_sends_null_expiry_for_admin_keys(self):
+        auth = KeyAuthorization(
+            key_id=self.KEY_ID, chain_id=7, is_admin=True, account=self.ACCOUNT
+        )
+        j = auth.sign("0x" + "a" * 64).to_json()
+        assert j["expiry"] is None
+
     def test_to_json_includes_witness(self):
         auth = KeyAuthorization(
             key_id=self.KEY_ID, chain_id=7, witness="0x" + "11" * 32
