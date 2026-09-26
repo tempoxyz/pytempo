@@ -11,7 +11,7 @@ Returns :class:`~pytempo.Call` objects ready to use in a
 
 from pytempo.models import Call
 
-from ._decode import decode_u64
+from ._decode import decode_u64, decode_uint, decode_word
 from ._encode import encode_calldata
 from .abis import STABLECOIN_DEX_ABI
 from .addresses import STABLECOIN_DEX_ADDRESS
@@ -128,3 +128,75 @@ class StablecoinDEX:
         call_data = encode_calldata(_ABI, "storageCredits", [user])
         result = w3.eth.call({"to": STABLECOIN_DEX_ADDRESS, "data": call_data})
         return decode_u64(result, "storageCredits")
+
+    @staticmethod
+    def quote_swap_exact_amount_in(
+        w3, *, token_in: str, token_out: str, amount_in: int
+    ) -> int:
+        """Quote the output of ``swapExactAmountIn`` without executing a swap.
+
+        Args:
+            w3: Web3 instance connected to a Tempo RPC.
+            token_in: Address of the token being sold.
+            token_out: Address of the token being bought.
+            amount_in: Exact input amount, in base units.
+
+        Returns:
+            The amount of ``token_out`` the swap would produce.
+        """
+        call_data = encode_calldata(
+            _ABI, "quoteSwapExactAmountIn", [token_in, token_out, amount_in]
+        )
+        result = w3.eth.call({"to": STABLECOIN_DEX_ADDRESS, "data": call_data})
+        return decode_uint(result, "quoteSwapExactAmountIn")
+
+    @staticmethod
+    def quote_swap_exact_amount_out(
+        w3, *, token_in: str, token_out: str, amount_out: int
+    ) -> int:
+        """Quote the input ``swapExactAmountOut`` requires without executing a swap.
+
+        Args:
+            w3: Web3 instance connected to a Tempo RPC.
+            token_in: Address of the token being sold.
+            token_out: Address of the token being bought.
+            amount_out: Exact output amount, in base units.
+
+        Returns:
+            The amount of ``token_in`` the swap would require.
+        """
+        call_data = encode_calldata(
+            _ABI, "quoteSwapExactAmountOut", [token_in, token_out, amount_out]
+        )
+        result = w3.eth.call({"to": STABLECOIN_DEX_ADDRESS, "data": call_data})
+        return decode_uint(result, "quoteSwapExactAmountOut")
+
+    @staticmethod
+    def tick_to_price(w3, *, tick: int) -> int:
+        """Return the price for an order ``tick`` (``tickToPrice(int16)``).
+
+        Args:
+            w3: Web3 instance connected to a Tempo RPC.
+            tick: The order tick to convert.
+
+        Returns:
+            The price corresponding to ``tick`` (scaled by ``PRICE_SCALE``).
+        """
+        call_data = encode_calldata(_ABI, "tickToPrice", [tick])
+        result = w3.eth.call({"to": STABLECOIN_DEX_ADDRESS, "data": call_data})
+        return decode_uint(result, "tickToPrice")
+
+    @staticmethod
+    def price_to_tick(w3, *, price: int) -> int:
+        """Return the order ``tick`` for a ``price`` (``priceToTick(uint32)``).
+
+        Args:
+            w3: Web3 instance connected to a Tempo RPC.
+            price: The price to convert (scaled by ``PRICE_SCALE``).
+
+        Returns:
+            The signed ``int16`` tick corresponding to ``price``.
+        """
+        call_data = encode_calldata(_ABI, "priceToTick", [price])
+        result = w3.eth.call({"to": STABLECOIN_DEX_ADDRESS, "data": call_data})
+        return int.from_bytes(decode_word(result, "priceToTick"), "big", signed=True)
