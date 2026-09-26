@@ -84,3 +84,37 @@ def test_batch_calls():
     assert len(tx.calls) == 2
     assert tx.calls[0].value == 0
     assert tx.calls[1].value == 100
+
+
+def test_from_dict_coerces_hex_string_quantities():
+    """JSON-RPC dicts hex-encode quantities; from_dict must accept them."""
+    tx = TempoTransaction.from_dict(
+        {
+            "chainId": "0xa5bd",
+            "maxFeePerGas": "0x77359400",
+            "maxPriorityFeePerGas": "0x1",
+            "gas": "0x186a0",
+            "nonce": "0x5",
+            "to": "0xF0109fC8DF283027b6285cc889F5aA624EaC1F55",
+            "value": "0x64",
+            "data": "0x",
+        }
+    )
+    tx.validate()
+    assert tx.chain_id == 0xA5BD
+    assert tx.max_fee_per_gas == 0x77359400
+    assert tx.max_priority_fee_per_gas == 1
+    assert tx.gas_limit == 0x186A0
+    assert tx.nonce == 5
+    assert tx.calls[0].value == 100
+
+
+def test_from_dict_accepts_int_quantities():
+    """Snake_case/int dicts still parse (no regression)."""
+    tx = TempoTransaction.from_dict(
+        {"chain_id": 42429, "gas": 100_000, "value": 7, "to": "0x" + "a" * 40}
+    )
+    tx.validate()
+    assert tx.chain_id == 42429
+    assert tx.gas_limit == 100_000
+    assert tx.calls[0].value == 7
