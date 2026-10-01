@@ -562,6 +562,9 @@ class TempoTransaction:
     ) -> dict:
         """Build an eth_estimateGas request dict from this transaction.
 
+        A single call is sent as ``to``/``data``/``value``. A batch is sent as
+        ``calls`` so the node estimates every call, not just the first.
+
         Args:
             sender: Address of the sender (hex string).
             key_id: Optional access key address for keychain signature gas estimation.
@@ -571,23 +574,25 @@ class TempoTransaction:
         if not self.calls:
             raise ValueError("Transaction must have at least one call")
 
-        first_call = self.calls[0]
-        to_addr = bytes(first_call.to)
-        data = first_call.data
-        value = first_call.value
+        request: dict = {"from": sender}
 
-        data_hex = "0x" + data.hex() if data else "0x"
-
-        request: dict = {
-            "from": sender,
-            "data": data_hex,
-        }
-
-        if to_addr:
-            request["to"] = to_checksum_address(to_addr)
-
-        if value:
-            request["value"] = hex(value)
+        if len(self.calls) == 1:
+            call = self.calls[0]
+            to_addr = bytes(call.to)
+            request["data"] = "0x" + call.data.hex() if call.data else "0x"
+            if to_addr:
+                request["to"] = to_checksum_address(to_addr)
+            if call.value:
+                request["value"] = hex(call.value)
+        else:
+            request["calls"] = [
+                {
+                    "to": to_checksum_address(bytes(c.to)) if bytes(c.to) else None,
+                    "value": hex(c.value),
+                    "data": "0x" + c.data.hex(),
+                }
+                for c in self.calls
+            ]
 
         if key_id is not None:
             request["keyId"] = key_id
