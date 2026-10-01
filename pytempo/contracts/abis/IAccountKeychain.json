@@ -610,6 +610,30 @@
         "type": "address"
       }
     ],
+    "name": "getFundingPolicyId",
+    "outputs": [
+      {
+        "internalType": "uint64",
+        "name": "",
+        "type": "uint64"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "keyId",
+        "type": "address"
+      }
+    ],
     "name": "getKey",
     "outputs": [
       {

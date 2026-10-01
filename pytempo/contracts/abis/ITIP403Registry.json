@@ -429,6 +429,25 @@
   {
     "inputs": [
       {
+        "internalType": "address[]",
+        "name": "tokens",
+        "type": "address[]"
+      }
+    ],
+    "name": "migrateTransferPolicyIds",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "migrated",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "uint64",
         "name": "policyId",
         "type": "uint64"
@@ -611,6 +630,30 @@
     "name": "setReceivePolicy",
     "outputs": [],
     "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "token",
+        "type": "address"
+      }
+    ],
+    "name": "tokenTransferPolicyId",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "isSet",
+        "type": "bool"
+      },
+      {
+        "internalType": "uint64",
+        "name": "policyId",
+        "type": "uint64"
+      }
+    ],
+    "stateMutability": "view",
     "type": "function"
   },
   {

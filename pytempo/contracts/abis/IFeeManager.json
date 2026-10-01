@@ -433,12 +433,12 @@
     "inputs": [
       {
         "internalType": "bytes32",
-        "name": "",
+        "name": "poolId",
         "type": "bytes32"
       },
       {
         "internalType": "address",
-        "name": "",
+        "name": "user",
         "type": "address"
       }
     ],
@@ -491,7 +491,7 @@
     "inputs": [
       {
         "internalType": "bytes32",
-        "name": "",
+        "name": "poolId",
         "type": "bytes32"
       }
     ],
@@ -575,7 +575,7 @@
     "inputs": [
       {
         "internalType": "bytes32",
-        "name": "",
+        "name": "poolId",
         "type": "bytes32"
       }
     ],

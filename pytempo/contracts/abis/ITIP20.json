@@ -170,6 +170,31 @@
       {
         "indexed": true,
         "internalType": "address",
+        "name": "burner",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "from",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "BurnAt",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
         "name": "from",
         "type": "address"
       },
@@ -412,6 +437,19 @@
   },
   {
     "inputs": [],
+    "name": "BURN_AT_ROLE",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "BURN_BLOCKED_ROLE",
     "outputs": [
       {
@@ -551,6 +589,24 @@
       }
     ],
     "name": "burn",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "from",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "burnAt",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -913,7 +969,7 @@
     "inputs": [
       {
         "internalType": "address",
-        "name": "newRewardRecipient",
+        "name": "recipient",
         "type": "address"
       }
     ],
@@ -1108,7 +1164,7 @@
     "inputs": [
       {
         "internalType": "address",
-        "name": "",
+        "name": "account",
         "type": "address"
       }
     ],

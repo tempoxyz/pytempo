@@ -105,6 +105,14 @@ class TIP20:
         data = encode_calldata(_ABI, "burnBlocked", [sender, amount])
         return Call.create(to=self.token, data=data)
 
+    def burn_at(self, *, sender: str, amount: int) -> Call:
+        """Build a ``burnAt(address,uint256)`` call (``BURN_AT_ROLE`` only, T12+).
+
+        Burns from any unprotected account without checking its transfer policy.
+        """
+        data = encode_calldata(_ABI, "burnAt", [sender, amount])
+        return Call.create(to=self.token, data=data)
+
     def change_transfer_policy_id(self, *, new_policy_id: int) -> Call:
         """Build a ``changeTransferPolicyId(uint64)`` call."""
         data = encode_calldata(_ABI, "changeTransferPolicyId", [new_policy_id])
@@ -270,6 +278,10 @@ class TIP20:
     def burn_blocked_role(self, w3) -> bytes:
         """Query ``BURN_BLOCKED_ROLE()``."""
         return self._role_constant(w3, "BURN_BLOCKED_ROLE")
+
+    def burn_at_role(self, w3) -> bytes:
+        """Query ``BURN_AT_ROLE()`` (T12+)."""
+        return self._role_constant(w3, "BURN_AT_ROLE")
 
     def issuer_role(self, w3) -> bytes:
         """Query ``ISSUER_ROLE()``."""
