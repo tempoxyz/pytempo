@@ -8,8 +8,11 @@ Create a {py:class}`~pytempo.KeyAuthorization`, sign it with the root account, a
 
 ```python
 from pytempo import (
-    TempoTransaction, Call,
-    KeyAuthorization, SignatureType, TokenLimit,
+    TempoTransaction,
+    Call,
+    KeyAuthorization,
+    SignatureType,
+    TokenLimit,
 )
 
 # Create authorization for a new access key
@@ -18,9 +21,7 @@ auth = KeyAuthorization(
     chain_id=42429,
     key_type=SignatureType.SECP256K1,
     expiry=1893456000,  # optional: expires ~2030
-    limits=(
-        TokenLimit(token="0xUSDCAddress...", limit=1000 * 10**6),
-    ),
+    limits=(TokenLimit(token="0xUSDCAddress...", limit=1000 * 10**6),),
 )
 
 # Sign with root account
