@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.1 (2026-10-06)
+
+### Patch Changes
+
+- Fixed certificate verification for package-registry checks in the release workflow. (by @DerekCofausper, [#119](https://github.com/tempoxyz/pytempo/pull/119))
+
 ## 0.6.0 (2026-10-01)
 
 ### Minor Changes
