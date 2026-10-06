@@ -1,6 +1,8 @@
 # Changelog
 
-## 0.6.0 (2026-10-01)
+## 0.6.1 (2026-10-06)
+
+First published 0.6.x release. Version 0.6.0 was prepared but not published to PyPI.
 
 ### Minor Changes
 
@@ -37,6 +39,7 @@
 
 ### Patch Changes
 
+- Fixed certificate verification for package-registry checks in the release workflow. (by @DerekCofausper, [#119](https://github.com/tempoxyz/pytempo/pull/119))
 - Updated the fee token integration test to use genesis-seeded FeeAMM liquidity, consolidating two tests into one and removing the liquidity minting step. (by @DerekCofausper, [#87](https://github.com/tempoxyz/pytempo/pull/87))
 - Update the fee token integration test to use genesis-seeded FeeAMM liquidity. (by @DerekCofausper, [#87](https://github.com/tempoxyz/pytempo/pull/87))
 - Fixed `KeyRestrictions.is_call_allowed` to reject a recipient-constrained call whose first ABI word after the selector has non-zero upper bytes. It now requires a clean ABI-encoded address (upper 12 bytes zero) before comparing the recipient, matching `tempo_alloy`'s `call_scopes_allow` and the on-chain precompile. Previously the upper 12 bytes were ignored, so a malformed word could be reported as allowed even though the chain rejects it. (by @Devorun, [#91](https://github.com/tempoxyz/pytempo/pull/91))
