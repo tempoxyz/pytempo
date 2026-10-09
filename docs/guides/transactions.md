@@ -28,7 +28,7 @@ All parameters accept Python-native types. Hex strings are automatically coerced
 ```python
 signed_tx = tx.sign("0xPrivateKey...")
 
-assert tx.sender_signature is None       # original unchanged
+assert tx.sender_signature is None  # original unchanged
 assert signed_tx.sender_signature is not None
 ```
 
@@ -82,8 +82,8 @@ tx = TempoTransaction.create(
     chain_id=42429,
     gas_limit=100_000,
     max_fee_per_gas=2_000_000_000,
-    valid_after=1700000000,    # valid from this timestamp
-    valid_before=1700003600,   # expires after this timestamp
+    valid_after=1700000000,  # valid from this timestamp
+    valid_before=1700003600,  # expires after this timestamp
     calls=(Call.create(to="0xRecipient..."),),
 )
 ```
@@ -93,13 +93,15 @@ tx = TempoTransaction.create(
 {py:meth}`TempoTransaction.from_dict() <pytempo.TempoTransaction.from_dict>` accepts both `camelCase` and `snake_case` keys:
 
 ```python
-tx = TempoTransaction.from_dict({
-    "chainId": 42429,
-    "gas": 100_000,
-    "maxFeePerGas": 2_000_000_000,
-    "to": "0xRecipient...",
-    "value": 1000,
-})
+tx = TempoTransaction.from_dict(
+    {
+        "chainId": 42429,
+        "gas": 100_000,
+        "maxFeePerGas": 2_000_000_000,
+        "to": "0xRecipient...",
+        "value": 1000,
+    }
+)
 ```
 
 ## Contract creation
