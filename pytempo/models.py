@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import attrs
 import rlp
 from eth_account import Account
-from eth_utils import keccak, to_checksum_address
+from eth_utils import is_hex_address, keccak, to_checksum_address
 
 from .types import (
     Address,
@@ -556,14 +556,14 @@ class TempoTransaction:
 
     def to_estimate_gas_request(
         self,
-        sender: str,
-        key_id: str | None = None,
+        sender: BytesLike,
+        key_id: BytesLike | None = None,
         key_authorization: dict | SignedKeyAuthorization | None = None,
     ) -> dict:
         """Build an eth_estimateGas request dict from this transaction.
 
         Args:
-            sender: Address of the sender (hex string).
+            sender: Address of the sender (hex string or bytes).
             key_id: Optional access key address for keychain signature gas estimation.
             key_authorization: Optional :class:`SignedKeyAuthorization` or
                 pre-built JSON dict.
@@ -578,8 +578,14 @@ class TempoTransaction:
 
         data_hex = "0x" + data.hex() if data else "0x"
 
+        from_addr = (
+            to_checksum_address(bytes(sender))
+            if isinstance(sender, (bytes, bytearray, memoryview))
+            else to_checksum_address(sender)
+        )
+
         request: dict = {
-            "from": sender,
+            "from": from_addr,
             "data": data_hex,
         }
 
@@ -590,7 +596,13 @@ class TempoTransaction:
             request["value"] = hex(value)
 
         if key_id is not None:
-            request["keyId"] = key_id
+            request["keyId"] = (
+                to_checksum_address(bytes(key_id))
+                if isinstance(key_id, (bytes, bytearray, memoryview))
+                else to_checksum_address(key_id)
+                if is_hex_address(key_id)
+                else key_id
+            )
 
         if key_authorization is not None:
             if isinstance(key_authorization, dict):

@@ -393,3 +393,16 @@ class TestTempoTransaction:
         assert tx1.gas_limit == 21000
         assert tx2.gas_limit == 200000
         assert tx1 is not tx2
+
+    def test_to_estimate_gas_request_with_address_and_bytes(self):
+        tx = TempoTransaction.create(
+            chain_id=42429,
+            calls=(Call.create(to="0xF0109fC8DF283027b6285cc889F5aA624EaC1F55", value=100),),
+        )
+        sender_bytes = as_address("0xF0109fC8DF283027b6285cc889F5aA624EaC1F55")
+        req = tx.to_estimate_gas_request(sender=sender_bytes, key_id=sender_bytes)
+
+        assert req["from"] == "0xF0109fC8DF283027b6285cc889F5aA624EaC1F55"
+        assert req["to"] == "0xF0109fC8DF283027b6285cc889F5aA624EaC1F55"
+        assert req["keyId"] == "0xF0109fC8DF283027b6285cc889F5aA624EaC1F55"
+        assert req["value"] == hex(100)
