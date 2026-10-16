@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.2 (2026-10-16)
+
+### Patch Changes
+
+- Buffered GitHub Actions updates to satisfy the scanner's seven-day minimum age. (by @DerekCofausper, [94fb21f](https://github.com/tempoxyz/pytempo/commit/94fb21f))
+- Updated the locked multidict dependency to fix reference leaks in items-view operations. (by @DerekCofausper, [#121](https://github.com/tempoxyz/pytempo/pull/121))
+
 ## 0.6.1 (2026-10-06)
 
 First published 0.6.x release. Version 0.6.0 was prepared but not published to PyPI.
