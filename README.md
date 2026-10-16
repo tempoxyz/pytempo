@@ -179,13 +179,15 @@ signed_tx = tx.sign("0xPrivateKey...")
 from pytempo import TempoTransaction
 
 # Supports both camelCase and snake_case keys
-tx = TempoTransaction.from_dict({
-    "chainId": 42429,
-    "gas": 100_000,
-    "maxFeePerGas": 2_000_000_000,
-    "to": "0xRecipient...",
-    "value": 1000,
-})
+tx = TempoTransaction.from_dict(
+    {
+        "chainId": 42429,
+        "gas": 100_000,
+        "maxFeePerGas": 2_000_000_000,
+        "to": "0xRecipient...",
+        "value": 1000,
+    }
+)
 ```
 
 ### Type Coercion Helpers (v0.2.1+)
