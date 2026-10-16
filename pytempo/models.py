@@ -286,12 +286,21 @@ class TempoTransaction:
                     return d[key]
             return default
 
-        chain_id = get_key("chainId", "chain_id", default=1)
-        max_priority_fee = get_key(
-            "maxPriorityFeePerGas", "max_priority_fee_per_gas", default=0
+        def as_int(value):
+            # Coerce JSON-RPC quantities (hex or decimal strings) to int.
+            if value is None or isinstance(value, int):
+                return value
+            if isinstance(value, str):
+                base = 16 if value.lower().startswith("0x") else 10
+                return int(value, base)
+            return value
+
+        chain_id = as_int(get_key("chainId", "chain_id", default=1))
+        max_priority_fee = as_int(
+            get_key("maxPriorityFeePerGas", "max_priority_fee_per_gas", default=0)
         )
-        max_fee = get_key("maxFeePerGas", "max_fee_per_gas", default=0)
-        gas_limit = get_key("gas", "gasLimit", "gas_limit", default=21_000)
+        max_fee = as_int(get_key("maxFeePerGas", "max_fee_per_gas", default=0))
+        gas_limit = as_int(get_key("gas", "gasLimit", "gas_limit", default=21_000))
 
         calls_data = get_key("calls", default=[])
         if not calls_data:
@@ -304,7 +313,7 @@ class TempoTransaction:
         calls = tuple(
             Call.create(
                 to=call.get("to", "") or b"",
-                value=call.get("value", 0),
+                value=as_int(call.get("value", 0)),
                 data=call.get("data", call.get("input", "0x")),
             )
             for call in calls_data
@@ -338,10 +347,10 @@ class TempoTransaction:
             gas_limit=gas_limit,
             calls=calls,
             access_list=access_list,
-            nonce_key=get_key("nonceKey", "nonce_key", default=0),
-            nonce=get_key("nonce", default=0),
-            valid_before=get_key("validBefore", "valid_before"),
-            valid_after=get_key("validAfter", "valid_after"),
+            nonce_key=as_int(get_key("nonceKey", "nonce_key", default=0)),
+            nonce=as_int(get_key("nonce", default=0)),
+            valid_before=as_int(get_key("validBefore", "valid_before")),
+            valid_after=as_int(get_key("validAfter", "valid_after")),
             fee_token=fee_token,
             awaiting_fee_payer=bool(
                 get_key("_will_have_fee_payer", "awaiting_fee_payer", default=False)
