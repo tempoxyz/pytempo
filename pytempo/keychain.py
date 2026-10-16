@@ -797,8 +797,12 @@ class SignedKeyAuthorization:
             },
         }
 
-        if self.authorization.expiry is not None:
-            result["expiry"] = hex(self.authorization.expiry)
+        # The node requires `expiry`; `null` means the key never expires.
+        result["expiry"] = (
+            hex(self.authorization.expiry)
+            if self.authorization.expiry is not None
+            else None
+        )
 
         if self.authorization.limits is not None:
             result["limits"] = [
