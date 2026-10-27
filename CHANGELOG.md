@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.2 (2026-10-27)
+
+### Patch Changes
+
+- Buffered GitHub Actions updates to satisfy the scanner's seven-day minimum age. (by @decofe, [94fb21f](https://github.com/tempoxyz/pytempo/commit/94fb21f))
+- Updated the release workflow to tempoxyz/changelogs v0.11.0. (by @brendanjryan, [#132](https://github.com/tempoxyz/pytempo/pull/132))
+- Updated the locked aiohttp dependency to 3.14.4 to address resource exhaustion, request smuggling, request scheme spoofing, and cookie security vulnerabilities. (by @decofe, [#130](https://github.com/tempoxyz/pytempo/pull/130))
+- Updated the locked multidict dependency to fix reference leaks in items-view operations. (by @decofe, [#121](https://github.com/tempoxyz/pytempo/pull/121))
+- Updated the locked certificate trust bundle. (by @decofe, [#129](https://github.com/tempoxyz/pytempo/pull/129))
+
 ## 0.6.1 (2026-10-06)
 
 First published 0.6.x release. Version 0.6.0 was prepared but not published to PyPI.
