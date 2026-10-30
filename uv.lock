@@ -1733,12 +1733,13 @@ wheels = [
 
 [[package]]
 name = "pytempo"
-version = "0.6.1"
+version = "0.6.2"
 source = { editable = "." }
 dependencies = [
     { name = "attrs" },
     { name = "eth-account" },
     { name = "eth-utils" },
+    { name = "pycryptodome" },
     { name = "rlp" },
     { name = "web3" },
 ]
@@ -1766,6 +1767,7 @@ requires-dist = [
     { name = "attrs", specifier = ">=23.0.0" },
     { name = "eth-account", specifier = ">=0.11.0" },
     { name = "eth-utils", specifier = ">=4.0.0" },
+    { name = "pycryptodome", specifier = ">=3.20" },
     { name = "rlp", specifier = ">=4.0.0" },
     { name = "web3", specifier = ">=7.0.0" },
 ]

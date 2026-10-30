@@ -37,7 +37,7 @@ explicit empty-string placeholders (``0x80``) for absent earlier optionals.
 from __future__ import annotations
 
 from enum import IntEnum
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import attrs
 import rlp
@@ -57,7 +57,7 @@ from .types import (
 )
 
 if TYPE_CHECKING:
-    from .models import Signature, TempoTransaction
+    from .models import TempoTransaction
 
 # ---------------------------------------------------------------------------
 # Signature type enum
@@ -721,6 +721,16 @@ class KeyAuthorization:
             signature=Signature(r=signed.r, s=signed.s, v=signed.v),
         )
 
+    def sign_with(self, signer: Any) -> SignedKeyAuthorization:
+        """Sign the key authorization with a root (or admin) key of any type:
+        a :class:`~pytempo.signatures.Secp256k1Account`,
+        :class:`~pytempo.signatures.P256Account` or
+        :class:`~pytempo.signatures.WebAuthnAccount`.
+        """
+        return SignedKeyAuthorization(
+            authorization=self, signature=signer.sign_hash(self.signature_hash())
+        )
+
 
 # ---------------------------------------------------------------------------
 # Signed key authorization
@@ -735,7 +745,7 @@ class SignedKeyAuthorization:
     """
 
     authorization: KeyAuthorization
-    signature: Signature  # from .models
+    signature: Any  # Signature | P256Signature | WebAuthnSignature
 
     @property
     def v(self) -> int:
@@ -767,7 +777,6 @@ class SignedKeyAuthorization:
         Expects ``[authorization, signature]`` where ``signature`` is a 65-byte
         secp256k1 signature.
         """
-        from .models import Signature
         from .types import as_bytes as _as_bytes
 
         items = rlp.decode(_as_bytes(raw))
@@ -775,8 +784,10 @@ class SignedKeyAuthorization:
             raise ValueError(
                 "SignedKeyAuthorization RLP must be [authorization, signature]"
             )
+        from .signatures import parse_primitive
+
         authorization = KeyAuthorization.from_rlp(items[0])
-        signature = Signature.from_bytes(_require_rlp_bytes(items[1]))
+        signature = parse_primitive(_require_rlp_bytes(items[1]))
         return cls(authorization=authorization, signature=signature)
 
     def to_json(self) -> dict:
@@ -789,12 +800,7 @@ class SignedKeyAuthorization:
             "chainId": hex(self.authorization.chain_id),
             "keyType": self.authorization.key_type.to_json_name(),
             "keyId": to_checksum_address(bytes(self.authorization.key_id)),
-            "signature": {
-                "type": "secp256k1",
-                "r": hex(self.signature.r),
-                "s": hex(self.signature.s),
-                "v": self.signature.v,
-            },
+            "signature": self._signature_json(),
         }
 
         if self.authorization.expiry is not None:
@@ -820,14 +826,27 @@ class SignedKeyAuthorization:
 
         return result
 
+    def _signature_json(self) -> dict:
+        from .models import Signature
+
+        if isinstance(self.signature, Signature):
+            return {
+                "type": "secp256k1",
+                "r": hex(self.signature.r),
+                "s": hex(self.signature.s),
+                "v": self.signature.v,
+            }
+        return self.signature.to_json()
+
     def recover_signer(self) -> str:
-        """Recover the checksummed address that signed this authorization."""
-        msg_hash = self.authorization.signature_hash()
-        recovered = Account._recover_hash(
-            msg_hash,
-            vrs=(self.signature.v, self.signature.r, self.signature.s),
+        """Verify the signature and return the checksummed address that signed
+        this authorization (a secp256k1, P256 or WebAuthn key)."""
+        from .signatures import recover_primitive
+
+        signer, _ = recover_primitive(
+            self.authorization.signature_hash(), self.signature
         )
-        return to_checksum_address(recovered)
+        return signer
 
 
 # ---------------------------------------------------------------------------
@@ -837,43 +856,71 @@ class SignedKeyAuthorization:
 
 @attrs.define(frozen=True)
 class KeychainSignature:
-    """Keychain V2 signature: ``0x04 || root_account (20) || inner (65)``.
+    """Keychain signature: ``version || root_account (20) || inner``.
+
+    ``version`` is ``0x04`` (V2, the default), whose inner signature signs
+    ``keccak256(0x04 || hash || root_account)``, or ``0x03`` (legacy V1), whose
+    inner signature signs the hash itself. The inner signature is a secp256k1
+    :class:`~pytempo.Signature` (86 bytes in all) or a P256 or WebAuthn
+    signature from :mod:`pytempo.signatures`.
 
     Args:
         root_account: Address of the root account the access key signs on behalf of.
-        inner: The secp256k1 signature from the access key.
+        inner: The access key's signature.
+        version: ``0x04`` (V2) or ``0x03`` (V1).
     """
 
     TYPE_BYTE: ClassVar[int] = 0x04
+    V1_TYPE_BYTE: ClassVar[int] = 0x03
     LENGTH: ClassVar[int] = 86
 
     root_account: Address = attrs.field(
         converter=as_address, validator=validate_nonempty_address
     )
-    inner: Signature  # from .models
+    inner: Any  # Signature | P256Signature | WebAuthnSignature
+    version: int = attrs.field(default=0x04)
+
+    @version.validator
+    def _check_version(self, attribute: attrs.Attribute, value: int) -> None:
+        if value not in (0x03, 0x04):
+            raise ValueError(f"keychain version must be 0x03 or 0x04, got {value:#04x}")
 
     def to_bytes(self) -> bytes:
-        return (
-            bytes([self.TYPE_BYTE]) + bytes(self.root_account) + self.inner.to_bytes()
-        )
+        return bytes([self.version]) + bytes(self.root_account) + self.inner.to_bytes()
 
     @classmethod
     def from_bytes(cls, raw: BytesLike) -> KeychainSignature:
-        """Parse a 86-byte keychain signature."""
-        from .models import Signature
+        """Parse a keychain signature (V1 or V2, any inner signature type)."""
+        from .signatures import parse_primitive
         from .types import as_bytes as _as_bytes
 
         b = _as_bytes(raw)
-        if len(b) != cls.LENGTH:
-            raise ValueError(
-                f"keychain signature must be {cls.LENGTH} bytes, got {len(b)}"
-            )
-        if b[0] != cls.TYPE_BYTE:
-            raise ValueError(f"expected type byte 0x04, got {b[0]:#04x}")
-        return cls(
-            root_account=b[1:21],
-            inner=Signature.from_bytes(b[21:86]),
-        )
+        if len(b) < 22:
+            raise ValueError(f"keychain signature is too short: {len(b)} bytes")
+        if b[0] not in (cls.TYPE_BYTE, cls.V1_TYPE_BYTE):
+            raise ValueError(f"expected type byte 0x03 or 0x04, got {b[0]:#04x}")
+        return cls(root_account=b[1:21], inner=parse_primitive(b[21:]), version=b[0])
+
+    @classmethod
+    def sign_with(
+        cls,
+        msg_hash: bytes,
+        access_key: Any,
+        root_account: BytesLike,
+    ) -> KeychainSignature:
+        """Sign ``msg_hash`` for ``root_account`` with an access key of any type
+        (a :class:`~pytempo.signatures.P256Account`,
+        :class:`~pytempo.signatures.WebAuthnAccount` or
+        :class:`~pytempo.signatures.Secp256k1Account`), as a V2 envelope, as
+        viem's access-key accounts sign.
+        """
+        from .signatures import keychain_v2_hash
+
+        if len(msg_hash) != 32:
+            raise ValueError(f"msg_hash must be 32 bytes, got {len(msg_hash)}")
+        root_bytes = as_address(root_account)
+        inner = access_key.sign_hash(keychain_v2_hash(msg_hash, root_bytes))
+        return cls(root_account=root_bytes, inner=inner)
 
     @classmethod
     def sign(

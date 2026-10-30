@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import attrs
 import rlp
@@ -20,7 +20,7 @@ from .types import (
 )
 
 if TYPE_CHECKING:
-    from .keychain import KeychainSignature, SignedKeyAuthorization
+    from .keychain import SignedKeyAuthorization
 
 
 def _validate_call_value(
@@ -223,7 +223,9 @@ class TempoTransaction:
     awaiting_fee_payer: bool = False
 
     fee_payer_signature: Signature | None = None
-    sender_signature: Signature | KeychainSignature | None = None
+    sender_signature: Any = (
+        None  # Signature | KeychainSignature | P256Signature | WebAuthnSignature
+    )
 
     tempo_authorization_list: tuple[bytes, ...] = attrs.field(
         factory=tuple, converter=_convert_tempo_auth_list
@@ -553,6 +555,45 @@ class TempoTransaction:
         msg_hash = tx_with_sender.get_signing_hash(for_fee_payer=False)
         sig = KeychainSignature.sign(msg_hash, access_key_private_key, root_addr)
         return attrs.evolve(tx_with_sender, sender_signature=sig)
+
+    def sign_with(self, signer: Any) -> TempoTransaction:
+        """Sign as the sender with a key of any type: a
+        :class:`~pytempo.signatures.Secp256k1Account`,
+        :class:`~pytempo.signatures.P256Account` or
+        :class:`~pytempo.signatures.WebAuthnAccount`. The sender is the
+        signer's address (for P256 and WebAuthn keys, that of the public key).
+        """
+        sender = as_address(signer.address)
+        tx = attrs.evolve(self, sender_address=sender)
+        sig = signer.sign_hash(tx.get_signing_hash(for_fee_payer=False))
+        return attrs.evolve(tx, sender_signature=sig)
+
+    def sign_access_key_with(
+        self, access_key: Any, root_account: str
+    ) -> TempoTransaction:
+        """Sign for ``root_account`` with an access key of any type (Keychain
+        V2), as viem's access-key accounts sign."""
+        from .keychain import KeychainSignature
+
+        root_addr = as_address(root_account)
+        tx_with_sender = attrs.evolve(self, sender_address=root_addr)
+        msg_hash = tx_with_sender.get_signing_hash(for_fee_payer=False)
+        sig = KeychainSignature.sign_with(msg_hash, access_key, root_addr)
+        return attrs.evolve(tx_with_sender, sender_signature=sig)
+
+    def recover_signer(self) -> Any:
+        """Verify the sender signature (any type) and return its
+        :class:`~pytempo.signatures.RecoveredSigner`. For a Keychain signature,
+        whether the account authorized the key is on-chain state the caller
+        must check.
+        """
+        from .signatures import recover_signer
+
+        if self.sender_signature is None:
+            raise ValueError("transaction has no sender signature")
+        return recover_signer(
+            self.get_signing_hash(for_fee_payer=False), self.sender_signature
+        )
 
     def to_estimate_gas_request(
         self,
