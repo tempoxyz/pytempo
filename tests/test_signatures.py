@@ -426,3 +426,74 @@ def test_parse_primitive_rejects_bad_layouts() -> None:
         with pytest.raises(InvalidSignatureError):
             parse_primitive(raw)
     assert to_checksum_address(V["p256Address"]) == V["p256Address"]
+
+
+CLIENT_DATA = json.loads(
+    (
+        Path(__file__).parent / "testdata" / "viem" / "webauthn_client_data.json"
+    ).read_text()
+)
+
+
+@pytest.mark.parametrize("case", CLIENT_DATA["cases"], ids=lambda c: c["name"])
+def test_webauthn_client_data_matches_tempo_primitives(case: dict) -> None:
+    """clientDataJSON variants whose acceptance tempo-primitives decides (the
+    expectations were checked against tempo-primitives 1.11.0)."""
+    envelope = h(case["envelope"])
+    if case["accept"]:
+        assert (
+            recover_signer(h(CLIENT_DATA["hash"]), envelope).account.lower()
+            == CLIENT_DATA["address"].lower()
+        )
+    else:
+        with pytest.raises(InvalidSignatureError):
+            recover_signer(h(CLIENT_DATA["hash"]), envelope)
+
+
+@pytest.mark.parametrize(
+    ("vector", "rpc"),
+    [
+        ("p256Signature", "p256SignatureRpc"),
+        ("webAuthnSignature", "webAuthnSignatureRpc"),
+    ],
+)
+def test_rpc_form_matches_viem(vector: str, rpc: str) -> None:
+    assert parse_signature(h(V[vector])).to_json() == V[rpc]
+
+
+def test_rpc_form_pads_leading_zeros() -> None:
+    sig = P256Signature(r=1, s=2, pub_key_x=3, pub_key_y=4)
+    rpc = sig.to_json()
+    assert rpc["r"] == "0x" + "00" * 31 + "01"
+    assert all(len(rpc[k]) == 66 for k in ("r", "s", "pubKeyX", "pubKeyY"))
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        bytes(32) + bytes(32) + b"\x1b",  # zero r
+        b"\x01" * 32 + b"\xff" * 32 + b"\x1b",  # high s
+        b"\x01" * 32 + b"\x01" * 32 + b"\x05",  # bad v
+        b"\x04" + b"\x11" * 20 + bytes(64),  # keychain with a bad inner signature
+    ],
+)
+def test_malformed_envelopes_raise_invalid_signature_error(raw: bytes) -> None:
+    with pytest.raises(InvalidSignatureError):
+        recover_signer(HASH, raw)
+    with pytest.raises(InvalidSignatureError):
+        parse_signature(raw)
+
+
+def test_parse_signature_is_exported() -> None:
+    import pytempo
+
+    assert pytempo.parse_signature is parse_signature
+    assert pytempo.recover_signer is recover_signer
+
+
+def test_webauthn_refuses_oversized_assertions() -> None:
+    account = WebAuthnAccount(
+        V["webAuthnKey"], rp_id="x", origin="https://" + "a" * 2000
+    )
+    with pytest.raises(ValueError, match="exceeds"):
+        account.sign_hash(HASH)

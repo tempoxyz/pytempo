@@ -57,6 +57,10 @@ def _b32(n: int) -> bytes:
     return n.to_bytes(32, "big")
 
 
+def _hex32(n: int) -> str:
+    return "0x" + _b32(n).hex()
+
+
 def _validate_scalar(instance: object, attribute: attrs.Attribute, value: int) -> None:
     if not 0 <= value < 2**256:
         raise ValueError(f"{attribute.name} must fit in 32 bytes")
@@ -96,10 +100,10 @@ class P256Signature:
         """The JSON-RPC form, as ox's ``SignatureEnvelope.toRpc``."""
         return {
             "type": "p256",
-            "r": hex(self.r),
-            "s": hex(self.s),
-            "pubKeyX": hex(self.pub_key_x),
-            "pubKeyY": hex(self.pub_key_y),
+            "r": _hex32(self.r),
+            "s": _hex32(self.s),
+            "pubKeyX": _hex32(self.pub_key_x),
+            "pubKeyY": _hex32(self.pub_key_y),
             "preHash": self.pre_hash,
         }
 
@@ -138,10 +142,10 @@ class WebAuthnSignature:
         """The JSON-RPC form, as ox's ``SignatureEnvelope.toRpc``."""
         return {
             "type": "webAuthn",
-            "r": hex(self.r),
-            "s": hex(self.s),
-            "pubKeyX": hex(self.pub_key_x),
-            "pubKeyY": hex(self.pub_key_y),
+            "r": _hex32(self.r),
+            "s": _hex32(self.s),
+            "pubKeyX": _hex32(self.pub_key_x),
+            "pubKeyY": _hex32(self.pub_key_y),
             "webauthnData": "0x" + self.webauthn_data.hex(),
         }
 
@@ -283,6 +287,14 @@ class WebAuthnAccount(P256Account):
         authenticator_data, client_data_json = webauthn_assertion(
             msg_hash, self.rp_id, self.origin
         )
+        if (
+            len(authenticator_data) + len(client_data_json) + 128
+            > MAX_WEBAUTHN_SIGNATURE_LENGTH
+        ):
+            raise ValueError(
+                f"WebAuthn assertion exceeds {MAX_WEBAUTHN_SIGNATURE_LENGTH} bytes"
+                " (origin too long)"
+            )
         r, s = self.sign_digest(
             webauthn_message_hash(authenticator_data, client_data_json)
         )
@@ -325,12 +337,21 @@ PrimitiveSignature = Union["Signature", P256Signature, WebAuthnSignature]  # noq
 
 
 def parse_primitive(raw: BytesLike) -> PrimitiveSignature:
-    """Parse a primitive signature envelope (layout only; not verified)."""
+    """Parse a primitive signature envelope (layout only; not verified).
+
+    Raises:
+        InvalidSignatureError: If the envelope is malformed.
+    """
     from .models import Signature
 
     b = as_bytes(raw)
     if len(b) == 65:
-        return Signature.from_bytes(b)
+        try:
+            return Signature.from_bytes(b)
+        except ValueError as error:
+            raise InvalidSignatureError(
+                f"invalid secp256k1 signature: {error}"
+            ) from error
     if len(b) < 2:
         raise InvalidSignatureError("signature envelope is too short")
     data = b[1:]
@@ -369,7 +390,14 @@ def parse_signature(raw: BytesLike):  # noqa: ANN201
         and len(b) != 65
         and b[0] in (SIGNATURE_TYPE_KEYCHAIN_V1, SIGNATURE_TYPE_KEYCHAIN_V2)
     ):
-        return KeychainSignature.from_bytes(b)
+        try:
+            return KeychainSignature.from_bytes(b)
+        except InvalidSignatureError:
+            raise
+        except ValueError as error:
+            raise InvalidSignatureError(
+                f"invalid keychain signature: {error}"
+            ) from error
     return parse_primitive(b)
 
 
@@ -462,6 +490,80 @@ def _verify_p256(digest: bytes, r: int, s: int, public_key: bytes) -> str:
     return p256_address(public_key)
 
 
+class _Borrowable(str):
+    """A JSON string value without escapes, which serde can borrow."""
+
+
+class _Pairs(list):
+    """A JSON object's key/value pairs, in order, duplicates kept."""
+
+
+def _has_surrogates(value: str) -> bool:
+    return any("\udc80" <= ch <= "\udcff" for ch in value)
+
+
+def _parse_client_data(raw: bytes) -> tuple[str, str]:
+    """Read ``type`` and ``challenge`` from a clientDataJSON exactly as
+    tempo-primitives' serde struct does: a JSON object with valid UTF-8 keys
+    (or the two-element array serde also reads), field names matched exactly,
+    unknown fields ignored (and not UTF-8 validated), each field present once,
+    and both values plain strings without escapes.
+    """
+    from json import scanner
+    from json.decoder import JSONDecoder, scanstring
+
+    # serde does not UTF-8 validate ignored values: keep invalid bytes as
+    # surrogates and reject them only in keys and in the two fields.
+    text = raw.decode("utf-8", errors="surrogateescape")
+
+    def parse_string(s: str, end: int, strict: bool = True) -> tuple[str, int]:
+        value, new_end = scanstring(s, end, strict)
+        if "\\" not in s[end : new_end - 1] and not _has_surrogates(value):
+            return _Borrowable(value), new_end
+        return value, new_end
+
+    def reject_constant(name: str) -> None:
+        raise ValueError(f"{name} is not valid JSON")
+
+    def object_pairs(pairs: list[tuple[str, object]]) -> _Pairs:
+        for key, _ in pairs:
+            if _has_surrogates(key):
+                raise ValueError("a key is not valid UTF-8")
+        return _Pairs(pairs)
+
+    decoder = JSONDecoder(
+        object_pairs_hook=object_pairs, parse_constant=reject_constant
+    )
+    decoder.parse_string = parse_string  # type: ignore[attr-defined]
+    decoder.scan_once = scanner.py_make_scanner(decoder)  # type: ignore[attr-defined]
+    try:
+        parsed = decoder.decode(text)
+        if isinstance(parsed, _Pairs):
+            fields: dict[str, object] = {}
+            for key, value in parsed:
+                if key in ("type", "challenge"):
+                    if key in fields:
+                        raise ValueError(f"duplicate {key} field")
+                    fields[key] = value
+            if "type" not in fields or "challenge" not in fields:
+                raise ValueError("missing type or challenge field")
+            values = (fields["type"], fields["challenge"])
+        elif isinstance(parsed, list):
+            if len(parsed) != 2:
+                raise ValueError("array must hold exactly the type and challenge")
+            values = (parsed[0], parsed[1])
+        else:
+            raise ValueError("is not a JSON object")
+    except (ValueError, RecursionError) as error:
+        raise InvalidSignatureError(f"clientDataJSON is invalid: {error}") from error
+    for value in values:
+        if not isinstance(value, _Borrowable):
+            raise InvalidSignatureError(
+                "clientDataJSON type and challenge must be strings without escapes"
+            )
+    return str(values[0]), str(values[1])
+
+
 def _webauthn_message(data: bytes, challenge: bytes) -> bytes:
     """Validate WebAuthn assertion data for ``challenge`` as Tempo does and
     return the digest its key signed."""
@@ -476,13 +578,10 @@ def _webauthn_message(data: bytes, challenge: bytes) -> bytes:
         raise InvalidSignatureError("WebAuthn extensions are not supported")
     authenticator_data = data[:_MIN_AUTHENTICATOR_DATA]
     client_data_json = data[_MIN_AUTHENTICATOR_DATA:]
-    try:
-        client_data = json.loads(client_data_json)
-    except ValueError as error:
-        raise InvalidSignatureError("clientDataJSON is not valid JSON") from error
-    if not isinstance(client_data, dict) or client_data.get("type") != "webauthn.get":
+    client_type, client_challenge = _parse_client_data(client_data_json)
+    if client_type != "webauthn.get":
         raise InvalidSignatureError("clientDataJSON type must be webauthn.get")
-    if client_data.get("challenge") != _b64url(challenge):
+    if client_challenge != _b64url(challenge):
         raise InvalidSignatureError("WebAuthn challenge does not match")
     return webauthn_message_hash(authenticator_data, client_data_json)
 

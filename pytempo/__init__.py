@@ -50,6 +50,7 @@ from .signatures import (
     Secp256k1Account,
     WebAuthnAccount,
     WebAuthnSignature,
+    parse_signature,
     recover_signer,
 )
 from .types import (
@@ -104,6 +105,7 @@ __all__ = [
     "Secp256k1Account",
     "WebAuthnAccount",
     "WebAuthnSignature",
+    "parse_signature",
     "recover_signer",
     # Keychain signing (deprecated free functions)
     "KEYCHAIN_SIGNATURE_TYPE",
