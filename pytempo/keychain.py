@@ -138,9 +138,9 @@ class TokenLimit:
             raise ValueError(
                 f"TokenLimit RLP must be [token, limit, period?], got {item!r}"
             )
-        token = item[0]
-        limit = int.from_bytes(item[1], "big")
-        period = int.from_bytes(item[2], "big") if len(item) == 3 else 0
+        token = _require_rlp_bytes(item[0])
+        limit = _rlp_int(item[1])
+        period = _rlp_int(item[2]) if len(item) == 3 else 0
         return cls(token=token, limit=limit, period=period)
 
 

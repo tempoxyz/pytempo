@@ -522,7 +522,12 @@ class TempoTransaction:
             valid_before=valid_before,
             valid_after=valid_after,
             fee_token=fee_token or None,
-            fee_payer_signature=fee_payer_signature,
+            fee_payer_signature=(
+                None
+                if fee_payer_signature is _AWAITING_FEE_PAYER
+                else fee_payer_signature
+            ),
+            awaiting_fee_payer=fee_payer_signature is _AWAITING_FEE_PAYER,
             sender_signature=sender_signature,
             key_authorization=key_authorization,
         )
@@ -669,9 +674,13 @@ class TempoTransaction:
         self.validate()
 
         sender_sig = self.sender_signature.to_bytes() if self.sender_signature else b""
-        fee_payer_sig = (
-            self.fee_payer_signature.to_rlp_list() if self.fee_payer_signature else b""
-        )
+        # Before the fee payer co-signs, a sponsored transaction carries the 0x00
+        # marker and no fee token (the fee payer picks it), as ox serializes it.
+        awaiting = self.awaiting_fee_payer and self.fee_payer_signature is None
+        if self.fee_payer_signature:
+            fee_payer_sig = self.fee_payer_signature.to_rlp_list()
+        else:
+            fee_payer_sig = bytes([0x00]) if awaiting else b""
 
         fields = [
             self.chain_id,
@@ -684,7 +693,7 @@ class TempoTransaction:
             self.nonce,
             self._encode_optional_uint(self.valid_before),
             self._encode_optional_uint(self.valid_after),
-            bytes(self.fee_token) if self.fee_token else b"",
+            bytes(self.fee_token) if self.fee_token and not awaiting else b"",
             fee_payer_sig,
             list(self.tempo_authorization_list),
         ]
@@ -881,9 +890,19 @@ def _decode_access_list_item(item: object, name: str) -> AccessListItem:
     )
 
 
-def _decode_fee_payer_signature(item: object) -> Signature | None:
+_AWAITING_FEE_PAYER = object()
+
+
+def _decode_fee_payer_signature(item: object) -> Signature | object | None:
+    """Decode the fee payer field.
+
+    Returns None when unsponsored, _AWAITING_FEE_PAYER for the 0x00 marker a
+    sender writes before the fee payer co-signs, or the fee payer signature.
+    """
     if item == b"":
         return None
+    if item == b"\x00":
+        return _AWAITING_FEE_PAYER
     if not isinstance(item, list):
         raise ValueError("fee_payer_signature must be an RLP list [v, r, s] or empty")
     if len(item) != 3:

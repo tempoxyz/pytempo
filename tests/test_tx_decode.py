@@ -211,6 +211,22 @@ class TestDecodeRoundTrip:
         assert decoded.fee_token == tx.fee_token
         assert decoded.hash() == tx.hash()
 
+    def test_sponsored_awaiting_fee_payer(self):
+        # What a fee payer server receives: signed by the sender, with the 0x00
+        # marker in place of the fee payer signature and no fee token yet.
+        tx = _base_tx(awaiting_fee_payer=True).sign(SENDER_KEY)
+        raw = tx.encode()
+        decoded = TempoTransaction.decode(raw)
+        assert decoded.awaiting_fee_payer
+        assert decoded.fee_payer_signature is None
+        assert decoded.recover_sender() == _addr(SENDER_KEY)
+        assert decoded.recover_fee_payer() is None
+        assert decoded.encode() == raw
+        cosigned = decoded.sign(FEE_PAYER_KEY, for_fee_payer=True)
+        redecoded = TempoTransaction.decode(cosigned.encode())
+        assert redecoded.recover_sender() == _addr(SENDER_KEY)
+        assert redecoded.recover_fee_payer() == _addr(FEE_PAYER_KEY)
+
     def test_keychain_v2_with_periodic_key_authorization(self):
         auth = KeyAuthorization(
             key_id=_addr(ACCESS_KEY),
@@ -289,7 +305,6 @@ class TestDecodeRejects:
             pytest.param(3, b"\x01" * 9, id="gas-overflows-u64"),
             pytest.param(1, b"\x01" * 17, id="priority-fee-overflows-u128"),
             pytest.param(10, b"\x01" * 19, id="fee-token-wrong-length"),
-            pytest.param(11, b"\x00", id="fee-payer-placeholder"),
             pytest.param(4, [], id="no-calls"),
             pytest.param(4, b"", id="calls-not-a-list"),
         ],
@@ -403,6 +418,20 @@ class TestDecodeUnsupported:
         fields[12] = [[1337, b"\x11" * 20, 0, b"\x22" * 65]]
         with pytest.raises(NotImplementedError, match="tempo_authorization_list"):
             TempoTransaction.decode(_raw(fields))
+
+
+class TestTokenLimitFromRlp:
+    @pytest.mark.parametrize(
+        "item",
+        [
+            pytest.param([b"\x20" * 20, [b"\x01"]], id="limit-is-list"),
+            pytest.param([[b"\x20"], b"\x01"], id="token-is-list"),
+            pytest.param([b"\x20" * 20, b"\x01", [b"\x01"]], id="period-is-list"),
+        ],
+    )
+    def test_malformed_fields_raise_value_error(self, item):
+        with pytest.raises(ValueError):
+            TokenLimit.from_rlp(item)
 
 
 class TestRecovery:
