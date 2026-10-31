@@ -455,13 +455,11 @@ def recover_signer(msg_hash: bytes, envelope) -> RecoveredSigner:  # noqa: ANN00
     )
     if isinstance(sig, KeychainSignature):
         user = bytes(sig.root_account)
-        inner_hash = (
-            keychain_v2_hash(msg_hash, user)
-            if sig.version == SIGNATURE_TYPE_KEYCHAIN_V2
-            else msg_hash
-        )
+        inner_hash = keychain_v2_hash(msg_hash, user) if sig.version == 2 else msg_hash
         key_id, key_type = recover_primitive(inner_hash, sig.inner)
-        return RecoveredSigner(to_checksum_address(user), key_id, key_type, sig.version)
+        return RecoveredSigner(
+            to_checksum_address(user), key_id, key_type, sig.type_byte
+        )
     signer, key_type = recover_primitive(msg_hash, sig)
     return RecoveredSigner(signer, signer, key_type, 0)
 

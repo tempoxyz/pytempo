@@ -1512,15 +1512,77 @@ class TestKeyRestrictionsIsCallAllowed:
 
 
 class TestKeyAuthorizationPeriodicLimits:
-    """KeyAuthorization rejects periodic limits (inline auth doesn't support them)."""
+    """Inline KeyAuthorization encodes periodic limits as [token, limit, period]."""
 
-    def test_rejects_periodic_limit(self):
-        with pytest.raises(ValueError, match="periodic limits"):
-            KeyAuthorization(
+    TOKEN = "0x20c0000000000000000000000000000000000000"
+
+    def test_ka_periodic_limit_vector(self):
+        # tempo-conformance vectors/key-authorizations.json ka_periodic_limit
+        # (tempo-primitives / viem reference).
+        auth = KeyAuthorization(
+            key_id="0x7ae29539d1b7e18bb5919e2b7686c7173fdddda6",
+            chain_id=1337,
+            limits=[TokenLimit(token=self.TOKEN, limit=5_000_000, period=86400)],
+        )
+        signed = auth.sign(
+            "0xce1fd7bb97584bc031bb1bb795e841ea458b0da96373013719d6d5621b56c092"
+        )
+        assert auth.signature_hash().hex() == (
+            "cca1282b0eca15c3408d1ca9a4a29b981e49cfc9b13eac87b9303234e01f85ff"
+        )
+        assert signed.rlp_encode().hex() == (
+            "f87ef83982053980947ae29539d1b7e18bb5919e2b7686c7173fdddda680dedd94"
+            "20c0000000000000000000000000000000000000834c4b4083015180b841bb9a6f"
+            "78dd6970b84fc8fee530a78c409007f3e1e19708adff60b44929ae81f15ad3211a"
+            "3a8266b8a7f69d627a3f05b459cc6407911ed7bcc2ca3dca808f86a81c"
+        )
+        assert SignedKeyAuthorization.decode(signed.rlp_encode()) == signed
+
+    def test_token_limit_rlp_omits_zero_period(self):
+        assert TokenLimit(token=self.TOKEN, limit=7).to_rlp() == [
+            bytes.fromhex(self.TOKEN[2:]),
+            7,
+        ]
+        assert TokenLimit(token=self.TOKEN, limit=7, period=60).to_rlp() == [
+            bytes.fromhex(self.TOKEN[2:]),
+            7,
+            60,
+        ]
+
+    def test_periodic_limit_round_trips(self):
+        auth = KeyAuthorization(
+            key_id="0x" + "bb" * 20,
+            chain_id=42429,
+            expiry=4102444800,
+            limits=[
+                TokenLimit(token="0x" + "cc" * 20, limit=1000, period=3600),
+                TokenLimit(token="0x" + "dd" * 20, limit=5),
+            ],
+        )
+        assert KeyAuthorization.decode(auth.rlp_encode()) == auth
+
+    def test_period_changes_signing_hash(self):
+        def auth(period):
+            return KeyAuthorization(
                 key_id="0x" + "bb" * 20,
                 chain_id=42429,
-                limits=[TokenLimit(token="0x" + "cc" * 20, limit=1000, period=3600)],
+                limits=[TokenLimit(token=self.TOKEN, limit=1000, period=period)],
             )
+
+        assert auth(0).signature_hash() != auth(3600).signature_hash()
+
+    def test_to_json_includes_nonzero_period(self):
+        signed = KeyAuthorization(
+            key_id="0x" + "bb" * 20,
+            chain_id=42429,
+            limits=[
+                TokenLimit(token=self.TOKEN, limit=1000, period=3600),
+                TokenLimit(token="0x" + "cc" * 20, limit=5),
+            ],
+        ).sign("0x" + "a" * 64)
+        periodic, one_off = signed.to_json()["limits"]
+        assert periodic["period"] == hex(3600)
+        assert "period" not in one_off
 
     def test_accepts_zero_period_limit(self):
         auth = KeyAuthorization(

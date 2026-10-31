@@ -94,7 +94,7 @@ class TestSignersMatchViem:
 
     def test_keychain_v1_envelope(self, p256: P256Account) -> None:
         sig = KeychainSignature(
-            root_account=ROOT, inner=p256.sign_hash(HASH), version=0x03
+            root_account=ROOT, inner=p256.sign_hash(HASH), version=1
         )
         assert sig.to_bytes() == h(V["p256KeychainV1Signature"])
 
