@@ -317,6 +317,21 @@ class TestTempoTransaction:
 
         assert tx.awaiting_fee_payer is True
 
+    @pytest.mark.parametrize(
+        ("valid_after", "valid_before"), [(1000, 1000), (2000, 1000)]
+    )
+    def test_validate_rejects_empty_validity_window(self, valid_after, valid_before):
+        # tempo-primitives and the node require valid_before > valid_after.
+        tx = TempoTransaction.create(
+            chain_id=42429,
+            gas_limit=100000,
+            valid_after=valid_after,
+            valid_before=valid_before,
+            calls=(Call.create(to="0x" + "a" * 40),),
+        )
+        with pytest.raises(ValueError, match="valid_after cannot be greater"):
+            tx.validate()
+
     def test_create_with_fee_token(self):
         tx = TempoTransaction.create(
             chain_id=42429,
