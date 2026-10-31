@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.0 (2026-10-31)
+
+### Minor Changes
+
+- Added `TempoTransaction.decode()` to strictly decode signed `0x76` transactions (as tempo-primitives does) and recover the sender (the root account for keychain signatures), plus `TempoTransaction.recover_sender()`, `TempoTransaction.recover_fee_payer()`, `Signature.recover()` and `KeychainSignature.recover_key_id()`. `KeychainSignature` now also parses and encodes legacy V1 (`0x03`) envelopes via a new `version` field. P256, WebAuthn and configurable account signatures raise `NotImplementedError` when decoding. Added support for periodic token limits (`TokenLimit.period`) in inline key authorizations: they are encoded as `[token, limit, period]`, signed and included in `to_json()`, instead of being rejected. Fixed `TempoTransaction.validate()` to reject `valid_after == valid_before`, which the node rejects. (by @brendanjryan, [#134](https://github.com/tempoxyz/pytempo/pull/134))
+- Added P256 and WebAuthn signing and verification that match viem (and tempo-primitives, down to how WebAuthn clientDataJSON is parsed)'s tempo Accounts byte for byte, in the new `pytempo.signatures` module: `P256Account` and `WebAuthnAccount` (headless, like `Account.fromP256` and `Account.fromHeadlessWebAuthn`), `Secp256k1Account`, `P256Signature`, `WebAuthnSignature`, and `recover_signer`, which verifies any Tempo signature envelope (secp256k1, P256, WebAuthn, and Keychain V1 or V2 with any inner signature) as tempo-primitives does. Added `TempoTransaction.sign_with`, `TempoTransaction.sign_access_key_with` and `TempoTransaction.recover_signer`, `KeychainSignature.sign_with` for P256 and WebAuthn access keys, and `KeyAuthorization.sign_with` for any root key. `KeychainSignature` now accepts any inner signature, and `SignedKeyAuthorization.decode` and `TempoTransaction.decode` accept and recover P256 and WebAuthn signatures (sender, keychain access key and key authorization) instead of raising `NotImplementedError`. Declared `pycryptodome` as a direct dependency. (by @brendanjryan, [#133](https://github.com/tempoxyz/pytempo/pull/133))
+
 ## 0.6.2 (2026-10-27)
 
 ### Patch Changes
