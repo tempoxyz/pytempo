@@ -42,6 +42,17 @@ from .models import (
     Signature,
     TempoTransaction,
 )
+from .signatures import (
+    InvalidSignatureError,
+    P256Account,
+    P256Signature,
+    RecoveredSigner,
+    Secp256k1Account,
+    WebAuthnAccount,
+    WebAuthnSignature,
+    parse_signature,
+    recover_signer,
+)
 from .types import (
     Address,
     BytesLike,
@@ -86,6 +97,16 @@ __all__ = [
     "CallScope",
     "SelectorRule",
     "KeychainSignature",
+    # P256, WebAuthn and signature envelopes
+    "InvalidSignatureError",
+    "P256Account",
+    "P256Signature",
+    "RecoveredSigner",
+    "Secp256k1Account",
+    "WebAuthnAccount",
+    "WebAuthnSignature",
+    "parse_signature",
+    "recover_signer",
     # Keychain signing (deprecated free functions)
     "KEYCHAIN_SIGNATURE_TYPE",
     "KEYCHAIN_SIGNATURE_LENGTH",

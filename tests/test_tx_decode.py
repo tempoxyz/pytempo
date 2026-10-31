@@ -21,6 +21,7 @@ from pytempo import (
     TokenLimit,
 )
 from pytempo.models import SECP256K1_N
+from pytempo.signatures import P256Account, WebAuthnAccount
 
 TRANSFER = bytes.fromhex(
     "a9059cbb"
@@ -394,23 +395,54 @@ class TestDecodeRejects:
             TempoTransaction.decode(_raw(fields))
 
 
+class TestDecodeP256AndWebAuthn:
+    P256_KEY = "0x" + "55" * 32
+
+    def _accounts(self):
+        p256 = P256Account(self.P256_KEY)
+        webauthn = WebAuthnAccount(
+            "0x" + "66" * 32, rp_id="example.com", origin="https://example.com"
+        )
+        return p256, webauthn
+
+    def test_p256_and_webauthn_senders(self):
+        for account in self._accounts():
+            raw = _base_tx().sign_with(account).encode()
+            tx = TempoTransaction.decode(raw)
+            assert tx.sender_address == bytes.fromhex(account.address[2:])
+            assert tx.recover_sender() == account.address
+            assert tx.encode() == raw
+
+    def test_keychain_p256_and_webauthn_access_keys(self):
+        root = _addr(ROOT_KEY)
+        for account in self._accounts():
+            raw = _base_tx().sign_access_key_with(account, root).encode()
+            tx = TempoTransaction.decode(raw)
+            assert tx.recover_sender() == root
+            assert tx.recover_signer().key_id == account.address
+
+    def test_p256_signature_that_does_not_verify(self):
+        fields = _fields(DECODE_MINIMAL)
+        fields[-1] = b"\x01" + b"\x11" * 129
+        with pytest.raises(ValueError):
+            TempoTransaction.decode(_raw(fields))
+
+
 class TestDecodeUnsupported:
     @pytest.mark.parametrize(
-        ("signature", "kind"),
+        "signature",
         [
-            pytest.param(b"\x01" + b"\x11" * 129, "P256", id="p256"),
-            pytest.param(b"\x02" + b"\x11" * 200, "WebAuthn", id="webauthn"),
+            pytest.param(b"\x05" + b"\x11" * 100, id="configurable"),
             pytest.param(
-                b"\x04" + b"\x22" * 20 + b"\x01" + b"\x11" * 129,
-                "P256",
-                id="keychain-p256",
+                b"\x04" + b"\x22" * 20 + b"\x05" + b"\x11" * 100,
+                id="keychain-configurable",
             ),
         ],
     )
-    def test_p256_and_webauthn_senders(self, signature, kind):
+    def test_configurable_account_senders(self, signature):
         fields = _fields(DECODE_MINIMAL)
         fields[-1] = signature
-        with pytest.raises(NotImplementedError, match=kind):
+        with pytest.raises(NotImplementedError, match="configurable"):
             TempoTransaction.decode(_raw(fields))
 
     def test_non_empty_tempo_authorization_list(self):

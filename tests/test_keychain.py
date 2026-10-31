@@ -604,12 +604,15 @@ class TestKeychainSignatureType:
         assert parsed.inner == sig.inner
 
     def test_from_bytes_rejects_wrong_length(self):
-        with pytest.raises(ValueError, match="86 bytes"):
-            KeychainSignature.from_bytes(b"\x00" * 85)
+        # 0x04 || root || a 64-byte inner signature, which is no valid type.
+        with pytest.raises(ValueError, match="signature"):
+            KeychainSignature.from_bytes(b"\x04" + b"\x11" * 20 + b"\x00" * 64)
+        with pytest.raises(ValueError, match="too short"):
+            KeychainSignature.from_bytes(b"\x04" + b"\x11" * 20)
 
     def test_from_bytes_rejects_wrong_type_byte(self):
         raw = b"\x05" + b"\x00" * 85
-        with pytest.raises(ValueError, match="0x04"):
+        with pytest.raises(ValueError, match="0x03 or 0x04"):
             KeychainSignature.from_bytes(raw)
 
     def test_frozen(self):
