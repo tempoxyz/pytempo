@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, NoReturn
+from typing import TYPE_CHECKING, Any
 
 import attrs
 import rlp
@@ -20,7 +20,7 @@ from .types import (
 )
 
 if TYPE_CHECKING:
-    from .keychain import KeychainSignature, SignedKeyAuthorization
+    from .keychain import SignedKeyAuthorization
 
 
 def _validate_call_value(
@@ -238,7 +238,9 @@ class TempoTransaction:
     awaiting_fee_payer: bool = False
 
     fee_payer_signature: Signature | None = None
-    sender_signature: Signature | KeychainSignature | None = None
+    sender_signature: Any = (
+        None  # Signature | KeychainSignature | P256Signature | WebAuthnSignature
+    )
 
     tempo_authorization_list: tuple[bytes, ...] = attrs.field(
         factory=tuple, converter=_convert_tempo_auth_list
@@ -419,9 +421,9 @@ class TempoTransaction:
         Raises:
             ValueError: If *raw* is not a valid signed Tempo transaction.
             NotImplementedError: If it is well-formed but uses something pytempo
-                cannot represent: P256, WebAuthn or configurable account
-                signatures (sender, keychain inner key or key authorization),
-                or a non-empty ``tempo_authorization_list``.
+                cannot represent: configurable account signatures (sender,
+                keychain inner key or key authorization), or a non-empty
+                ``tempo_authorization_list``.
         """
         from .keychain import KeyAuthorization, SignedKeyAuthorization
 
@@ -498,14 +500,18 @@ class TempoTransaction:
                 )
             authorization = KeyAuthorization.from_rlp(key_auth_item[0])
             ka_sig = _rlp_bytes(key_auth_item[1], "key_authorization signature")
-            if len(ka_sig) != 65:
+            if len(ka_sig) == _SECP256K1_SIGNATURE_LENGTH:
+                ka_signature: Any = Signature.from_bytes(ka_sig)
+            else:
                 if len(ka_sig) >= 2 and ka_sig[0] in (0x03, 0x04):
                     raise ValueError(
                         "key_authorization signature cannot be a keychain signature"
                     )
-                _raise_for_typed_signature(ka_sig, "key_authorization signature")
+                ka_signature = _decode_typed_signature(
+                    ka_sig, "key_authorization signature"
+                )
             key_authorization = SignedKeyAuthorization(
-                authorization=authorization, signature=Signature.from_bytes(ka_sig)
+                authorization=authorization, signature=ka_signature
             )
 
         sender_signature = _decode_sender_signature(sender_sig_bytes)
@@ -563,7 +569,12 @@ class TempoTransaction:
         if isinstance(sig, KeychainSignature):
             sig.recover_key_id(msg_hash)
             return to_checksum_address(bytes(sig.root_account))
-        return sig.recover(msg_hash)
+        if isinstance(sig, Signature):
+            return sig.recover(msg_hash)
+        from .signatures import recover_primitive
+
+        signer, _ = recover_primitive(msg_hash, sig)
+        return signer
 
     def recover_fee_payer(self) -> str | None:
         """Recover the checksummed fee payer, or ``None`` if not sponsored.
@@ -769,6 +780,45 @@ class TempoTransaction:
         sig = KeychainSignature.sign(msg_hash, access_key_private_key, root_addr)
         return attrs.evolve(tx_with_sender, sender_signature=sig)
 
+    def sign_with(self, signer: Any) -> TempoTransaction:
+        """Sign as the sender with a key of any type: a
+        :class:`~pytempo.signatures.Secp256k1Account`,
+        :class:`~pytempo.signatures.P256Account` or
+        :class:`~pytempo.signatures.WebAuthnAccount`. The sender is the
+        signer's address (for P256 and WebAuthn keys, that of the public key).
+        """
+        sender = as_address(signer.address)
+        tx = attrs.evolve(self, sender_address=sender)
+        sig = signer.sign_hash(tx.get_signing_hash(for_fee_payer=False))
+        return attrs.evolve(tx, sender_signature=sig)
+
+    def sign_access_key_with(
+        self, access_key: Any, root_account: str
+    ) -> TempoTransaction:
+        """Sign for ``root_account`` with an access key of any type (Keychain
+        V2), as viem's access-key accounts sign."""
+        from .keychain import KeychainSignature
+
+        root_addr = as_address(root_account)
+        tx_with_sender = attrs.evolve(self, sender_address=root_addr)
+        msg_hash = tx_with_sender.get_signing_hash(for_fee_payer=False)
+        sig = KeychainSignature.sign_with(msg_hash, access_key, root_addr)
+        return attrs.evolve(tx_with_sender, sender_signature=sig)
+
+    def recover_signer(self) -> Any:
+        """Verify the sender signature (any type) and return its
+        :class:`~pytempo.signatures.RecoveredSigner`. For a Keychain signature,
+        whether the account authorized the key is on-chain state the caller
+        must check.
+        """
+        from .signatures import recover_signer
+
+        if self.sender_signature is None:
+            raise ValueError("transaction has no sender signature")
+        return recover_signer(
+            self.get_signing_hash(for_fee_payer=False), self.sender_signature
+        )
+
     def to_estimate_gas_request(
         self,
         sender: str,
@@ -919,35 +969,33 @@ def _decode_fee_payer_signature(item: object) -> Signature | object | None:
     )
 
 
-def _raise_for_typed_signature(data: bytes, name: str) -> NoReturn:
-    """Reject a typed (non-65-byte) primitive signature.
+def _decode_typed_signature(data: bytes, name: str) -> Any:
+    """Decode a typed (non-65-byte) P256 or WebAuthn primitive signature.
 
-    Malformed envelopes raise ValueError; well-formed P256, WebAuthn and
-    configurable account signatures raise NotImplementedError, since pytempo
-    cannot recover them.
+    Malformed envelopes raise ValueError; well-formed configurable account
+    signatures raise NotImplementedError, since pytempo cannot represent them.
     """
+    from .signatures import parse_primitive
+
     if len(data) < 2:
         raise ValueError(f"{name} is too short: expected type identifier + data")
     type_id, body = data[0], data[1:]
     if type_id == _SIGNATURE_TYPE_P256:
         if len(body) != _P256_SIGNATURE_LENGTH:
             raise ValueError(f"{name}: invalid P256 signature length")
-        kind = "P256"
     elif type_id == _SIGNATURE_TYPE_WEBAUTHN:
         if not 128 <= len(body) <= _MAX_WEBAUTHN_SIGNATURE_LENGTH:
             raise ValueError(f"{name}: invalid WebAuthn signature length")
-        kind = "WebAuthn"
     elif type_id == _SIGNATURE_TYPE_CONFIGURABLE_ACCOUNT:
-        kind = "configurable account"
+        raise NotImplementedError(
+            f"{name}: configurable account signatures are not supported by pytempo"
+        )
     else:
         raise ValueError(f"{name}: unknown signature type identifier {type_id:#04x}")
-    raise NotImplementedError(
-        f"{name}: {kind} signatures are not supported by pytempo "
-        "(only secp256k1 and secp256k1 keychain signatures can be recovered)"
-    )
+    return parse_primitive(data)
 
 
-def _decode_sender_signature(data: bytes) -> Signature | KeychainSignature:
+def _decode_sender_signature(data: bytes) -> Any:
     from .keychain import KeychainSignature
 
     if not data:
@@ -976,5 +1024,6 @@ def _decode_sender_signature(data: bytes) -> Signature | KeychainSignature:
             raise ValueError(
                 "keychain V1 signature cannot wrap a configurable account signature"
             )
-        _raise_for_typed_signature(inner, "keychain inner signature")
-    _raise_for_typed_signature(data, "sender signature")
+        _decode_typed_signature(inner, "keychain inner signature")
+        return KeychainSignature.from_bytes(data)
+    return _decode_typed_signature(data, "sender signature")
