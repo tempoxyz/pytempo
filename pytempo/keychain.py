@@ -27,7 +27,8 @@ The full T6 RLP payload format (trailing-canonical) is::
     [chain_id, key_type, key_id, expiry?, limits?, allowed_calls?, witness?, is_admin?, account?]
 
 pytempo's inline ``KeyAuthorization`` models the subset
-``[chain_id, key_type, key_id, expiry?, limits?, witness?, is_admin?, account?]``;
+``[chain_id, key_type, key_id, expiry?, limits?, witness?, is_admin?, account?]``,
+where each limit is ``[token, limit, period?]``;
 ``allowed_calls`` is not supported inline (use
 :meth:`~pytempo.contracts.AccountKeychain.authorize_key` for call scopes).
 Because the wire ordering is positional, any present trailing field forces
@@ -124,10 +125,11 @@ class TokenLimit:
     period: int = attrs.field(default=0, validator=_validate_u64)
 
     def to_rlp(self) -> list:
-        # Wire form is [token, limit, period?] with period trailing-canonical
-        # (omitted when 0). Inline KeyAuthorization only allows period == 0,
-        # so the period field is always omitted here.
-        return [bytes(self.token), self.limit]
+        # Wire form is [token, limit, period?] with period trailing-canonical:
+        # omitted when 0 (one-off limit), matching tempo-primitives.
+        if self.period == 0:
+            return [bytes(self.token), self.limit]
+        return [bytes(self.token), self.limit, self.period]
 
     @classmethod
     def from_rlp(cls, item: object) -> TokenLimit:
@@ -136,9 +138,9 @@ class TokenLimit:
             raise ValueError(
                 f"TokenLimit RLP must be [token, limit, period?], got {item!r}"
             )
-        token = item[0]
-        limit = int.from_bytes(item[1], "big")
-        period = int.from_bytes(item[2], "big") if len(item) == 3 else 0
+        token = _require_rlp_bytes(item[0])
+        limit = _rlp_int(item[1])
+        period = _rlp_int(item[2]) if len(item) == 3 else 0
         return cls(token=token, limit=limit, period=period)
 
 
@@ -530,7 +532,8 @@ class KeyAuthorization:
         chain_id: Chain ID for replay protection (0 = valid on any chain)
         key_type: Type of key being authorized (SignatureType.SECP256K1, P256, or WEBAUTHN)
         expiry: Unix timestamp when key expires (None = never expires; 0 is invalid)
-        limits: Token spending limits (None = unlimited, () = no spending, tuple of :class:`TokenLimit` = specific limits)
+        limits: Token spending limits (None = unlimited, () = no spending, tuple of :class:`TokenLimit` = specific limits;
+            a limit with a non-zero ``period`` resets every ``period`` seconds)
         witness: Optional T5 key-authorization witness (None = no witness; a
             32-byte value, including all-zero, marks the witness as present).
         is_admin: T6 admin key flag. Admin keys can manage other keys but must
@@ -564,15 +567,6 @@ class KeyAuthorization:
                 raise ValueError("admin KeyAuthorization must not set expiry")
             if self.limits is not None:
                 raise ValueError("admin KeyAuthorization must not set limits")
-
-        if self.limits:
-            for lim in self.limits:
-                if lim.period != 0:
-                    raise ValueError(
-                        "inline KeyAuthorization does not support periodic limits "
-                        f"(token={bytes(lim.token).hex()}, period={lim.period}); "
-                        "use AccountKeychain.authorize_key() with KeyRestrictions instead"
-                    )
 
     def as_rlp_payload(self) -> list:
         """Return the RLP-encodable list representation.
@@ -805,6 +799,7 @@ class SignedKeyAuthorization:
                 {
                     "token": to_checksum_address(bytes(limit.token)),
                     "limit": hex(limit.limit),
+                    **({"period": hex(limit.period)} if limit.period else {}),
                 }
                 for limit in self.authorization.limits
             ]
@@ -837,29 +832,43 @@ class SignedKeyAuthorization:
 
 @attrs.define(frozen=True)
 class KeychainSignature:
-    """Keychain V2 signature: ``0x04 || root_account (20) || inner (65)``.
+    """Keychain signature: ``type || root_account (20) || inner (65)``.
+
+    ``type`` is ``0x04`` for V2 (the default; the access key signs
+    ``keccak256(0x04 || sig_hash || root_account)``) or ``0x03`` for the
+    legacy V1 envelope (the access key signs ``sig_hash`` directly).
 
     Args:
         root_account: Address of the root account the access key signs on behalf of.
         inner: The secp256k1 signature from the access key.
+        version: Keychain envelope version, 2 (default) or 1 (legacy).
     """
 
     TYPE_BYTE: ClassVar[int] = 0x04
+    TYPE_BYTE_V1: ClassVar[int] = 0x03
     LENGTH: ClassVar[int] = 86
 
     root_account: Address = attrs.field(
         converter=as_address, validator=validate_nonempty_address
     )
     inner: Signature  # from .models
+    version: int = attrs.field(
+        default=2, kw_only=True, validator=attrs.validators.in_((1, 2))
+    )
+
+    @property
+    def type_byte(self) -> int:
+        """The envelope's type byte: 0x04 (V2) or 0x03 (V1)."""
+        return self.TYPE_BYTE if self.version == 2 else self.TYPE_BYTE_V1
 
     def to_bytes(self) -> bytes:
         return (
-            bytes([self.TYPE_BYTE]) + bytes(self.root_account) + self.inner.to_bytes()
+            bytes([self.type_byte]) + bytes(self.root_account) + self.inner.to_bytes()
         )
 
     @classmethod
     def from_bytes(cls, raw: BytesLike) -> KeychainSignature:
-        """Parse a 86-byte keychain signature."""
+        """Parse an 86-byte keychain signature (V2 ``0x04`` or V1 ``0x03``)."""
         from .models import Signature
         from .types import as_bytes as _as_bytes
 
@@ -868,12 +877,32 @@ class KeychainSignature:
             raise ValueError(
                 f"keychain signature must be {cls.LENGTH} bytes, got {len(b)}"
             )
-        if b[0] != cls.TYPE_BYTE:
-            raise ValueError(f"expected type byte 0x04, got {b[0]:#04x}")
+        if b[0] not in (cls.TYPE_BYTE, cls.TYPE_BYTE_V1):
+            raise ValueError(f"expected type byte 0x04 or 0x03, got {b[0]:#04x}")
         return cls(
             root_account=b[1:21],
             inner=Signature.from_bytes(b[21:86]),
+            version=2 if b[0] == cls.TYPE_BYTE else 1,
         )
+
+    def access_key_signing_hash(self, msg_hash: bytes) -> bytes:
+        """Return the digest the access key signs for transaction hash *msg_hash*.
+
+        V2: ``keccak256(0x04 || msg_hash || root_account)``; V1: ``msg_hash``.
+        """
+        if len(msg_hash) != 32:
+            raise ValueError(f"msg_hash must be 32 bytes, got {len(msg_hash)}")
+        if self.version == 1:
+            return bytes(msg_hash)
+        return keccak(bytes([self.TYPE_BYTE]) + msg_hash + bytes(self.root_account))
+
+    def recover_key_id(self, msg_hash: bytes) -> str:
+        """Recover the checksummed access key address that signed *msg_hash*.
+
+        Raises:
+            ValueError: If the inner signature does not recover a key.
+        """
+        return self.inner.recover(self.access_key_signing_hash(msg_hash))
 
     @classmethod
     def sign(
