@@ -499,7 +499,22 @@ class _Pairs(list):
 
 
 def _has_surrogates(value: str) -> bool:
-    return any("\udc80" <= ch <= "\udcff" for ch in value)
+    """Whether a decoded JSON string holds a surrogate: an invalid UTF-8 byte
+    (kept by ``surrogateescape``) or a lone ``\\ud800``-``\\udfff`` escape,
+    neither of which serde accepts in the keys and fields it parses."""
+    return any("\ud800" <= ch <= "\udfff" for ch in value)
+
+
+def _ascii_number(parse):  # noqa: ANN001, ANN202
+    """Wrap a JSON number parser: Python's scanner matches any Unicode digit
+    (its number pattern uses ``\\d``), but JSON and serde allow only ASCII."""
+
+    def checked(text: str):  # noqa: ANN202
+        if not text.isascii():
+            raise ValueError(f"{text!r} is not a valid JSON number")
+        return parse(text)
+
+    return checked
 
 
 def _parse_client_data(raw: bytes) -> tuple[str, str]:
@@ -532,7 +547,10 @@ def _parse_client_data(raw: bytes) -> tuple[str, str]:
         return _Pairs(pairs)
 
     decoder = JSONDecoder(
-        object_pairs_hook=object_pairs, parse_constant=reject_constant
+        object_pairs_hook=object_pairs,
+        parse_constant=reject_constant,
+        parse_int=_ascii_number(int),
+        parse_float=_ascii_number(float),
     )
     decoder.parse_string = parse_string  # type: ignore[attr-defined]
     decoder.scan_once = scanner.py_make_scanner(decoder)  # type: ignore[attr-defined]
