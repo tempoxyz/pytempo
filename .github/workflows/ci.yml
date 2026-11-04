@@ -8,6 +8,12 @@ on:
     - cron: '0 */6 * * *'  # Every 6 hours - catch tempo drift early
   workflow_dispatch:  # Manual trigger
 
+# Superseded pushes to a pull request cancel their older run; main and
+# scheduled runs always finish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions: {}
 
 env:
@@ -19,8 +25,8 @@ jobs:
   abi-check:
     name: ABI Drift Check
     if: github.event_name != 'push'
-    continue-on-error: true
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
       id-token: write
@@ -38,14 +44,25 @@ jobs:
           echo "${EXPECTED_SHA}  /usr/local/bin/solc" | sha256sum -c -
           chmod +x /usr/local/bin/solc
 
-      - name: Check ABIs are in sync
+      # Vendored ABIs must match the pinned tempo-std commit (blocking).
+      - name: Check ABIs match the pinned tempo-std commit
         run: ./scripts/tempo_abis.sh --check
         env:
           GH_TOKEN: ${{ github.token }}
 
+      # The scheduled run also compares against tempo-std's default branch so
+      # upstream interface changes show up as a red scheduled run.
+      - name: Check ABIs against tempo-std master
+        if: github.event_name == 'schedule'
+        run: ./scripts/tempo_abis.sh --check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TEMPO_STD_REF: master
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
       id-token: write
@@ -68,19 +85,27 @@ jobs:
         run: uv sync --all-extras --dev
 
       - name: Run ruff linter
-        run: uv run ruff check .
+        run: uv run ruff check --output-format=github .
 
       - name: Run ruff formatter check
         run: uv run ruff format --check .
 
   test:
-    name: Test Python ${{ matrix.python-version }}
+    name: Test Python ${{ matrix.python-version }}${{ matrix.resolution == 'lowest-direct' && ' (lowest deps)' || '' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       UV_PYTHON: ${{ matrix.python-version }}
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        resolution: [locked]
+        include:
+          # Install the oldest versions pyproject.toml allows, so its lower
+          # bounds stay true.
+          - python-version: "3.10"
+            resolution: lowest-direct
     permissions:
       contents: read
       id-token: write
@@ -100,14 +125,20 @@ jobs:
         run: uv python install ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: uv sync --all-extras --dev
+        run: |
+          if [ "${{ matrix.resolution }}" = "lowest-direct" ]; then
+            uv sync --all-extras --dev --resolution lowest-direct
+          else
+            uv sync --all-extras --dev
+          fi
 
       - name: Run tests
-        run: uv run pytest -v tests/
+        run: uv run pytest -v --durations=10 tests/
 
   build:
     name: Build package
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
       id-token: write
@@ -124,26 +155,56 @@ jobs:
           version: "0.12.11"
 
       - name: Set up Python
-        run: uv python install 3.11
+        run: uv python install 3.12
 
       - name: Build package
         run: uv build
 
-      - name: Check package
+      # Install the wheel alone, without the web3 extra or dev dependencies,
+      # the way `pip install pytempo` does, and use the offline API.
+      - name: Smoke test the wheel without web3
         run: |
-          # `uv run` has already synchronized the locked project environment;
-          # avoid resolving newer transitive releases outside that lock here.
-          uv run pip install --no-deps dist/*.whl
-          uv run python -c "import pytempo; print(pytempo.__version__)"
+          uv venv --python 3.12 /tmp/smoke
+          uv pip install --python /tmp/smoke/bin/python dist/*.whl
+          /tmp/smoke/bin/python - <<'PY'
+          import importlib.metadata
+          import importlib.util
+
+          assert importlib.util.find_spec("web3") is None, "web3 must stay optional"
+
+          import pytempo
+          from pytempo import Call, TempoTransaction
+          from pytempo.contracts import ALPHA_USD, TIP20, StablecoinDEX
+
+          metadata_version = importlib.metadata.version("pytempo")
+          assert pytempo.__version__ == metadata_version, (
+              f"pytempo.__version__ is {pytempo.__version__}, "
+              f"package is {metadata_version}"
+          )
+
+          tx = TempoTransaction.create(
+              chain_id=42429,
+              gas_limit=100_000,
+              max_fee_per_gas=2_000_000_000,
+              nonce=0,
+              calls=(
+                  TIP20(ALPHA_USD).approve(spender=StablecoinDEX.ADDRESS, amount=10**18),
+                  Call.create(to="0xF0109fC8DF283027b6285cc889F5aA624EaC1F55", value=0),
+              ),
+          )
+          key = "0x7eafbf9699b30c9ed8e3d6bbae57dd4f047544fde34d4c982dd591c2bee39ad0"
+          raw = tx.sign(key).encode()
+          assert raw[0] == 0x76
+          print(f"pytempo {pytempo.__version__}: signed {len(raw)}-byte tx without web3")
+          PY
 
   integration-localnet:
     name: Integration Tests (Localnet)
     runs-on: ubuntu-latest
-    needs: [lint, test]
+    timeout-minutes: 15
     permissions:
       contents: read
       id-token: write
-
     steps:
       - name: Secure runner
         uses: tempoxyz/gh-actions/actions/secure-runner@35019557465e3c38ee3468be171771fd73577584 # 2026-10-20T06-22-38Z-35019557
@@ -171,14 +232,15 @@ jobs:
 
       - name: Wait for Tempo node
         run: |
-          echo "Waiting for Tempo node to start..."
-          for i in {1..30}; do
-            if curl -s http://localhost:8545 > /dev/null 2>&1; then
+          echo "Waiting for Tempo node to answer JSON-RPC..."
+          for i in {1..60}; do
+            if curl -sf -X POST -H 'Content-Type: application/json' \
+              --data '{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}' \
+              http://localhost:8545 | grep -q '"result"'; then
               echo "Tempo node is ready!"
               exit 0
             fi
-            echo "Attempt $i: Tempo node not ready yet..."
-            sleep 2
+            sleep 1
           done
           echo "Tempo node failed to start"
           docker logs tempo
@@ -203,11 +265,10 @@ jobs:
   integration-devnet:
     name: Integration Tests (Devnet)
     runs-on: ubuntu-latest
-    needs: [lint, test]
+    timeout-minutes: 15
     permissions:
       contents: read
       id-token: write
-
     steps:
       - name: Secure runner
         uses: tempoxyz/gh-actions/actions/secure-runner@35019557465e3c38ee3468be171771fd73577584 # 2026-10-20T06-22-38Z-35019557
@@ -227,18 +288,17 @@ jobs:
         run: uv sync --all-extras --dev
 
       - name: Run integration tests against devnet
-        run: uv run pytest -v -s tests/test_integration.py
+        run: uv run pytest -v -s --durations=10 tests/test_integration.py
         env:
           TEMPO_RPC_URL: ${{ secrets.TEMPO_DEVNET_RPC_URL }}
 
   integration-testnet:
     name: Integration Tests (Testnet)
     runs-on: ubuntu-latest
-    needs: [lint, test]
+    timeout-minutes: 15
     permissions:
       contents: read
       id-token: write
-
     steps:
       - name: Secure runner
         uses: tempoxyz/gh-actions/actions/secure-runner@35019557465e3c38ee3468be171771fd73577584 # 2026-10-20T06-22-38Z-35019557
@@ -258,6 +318,26 @@ jobs:
         run: uv sync --all-extras --dev
 
       - name: Run integration tests against testnet
-        run: uv run pytest -v -s tests/test_integration.py
+        run: uv run pytest -v -s --durations=10 tests/test_integration.py
         env:
           TEMPO_RPC_URL: ${{ secrets.TEMPO_TESTNET_RPC_URL }}
+
+  # One stable check to require in branch protection, whatever jobs above
+  # are added or renamed.
+  ci-success:
+    name: CI Success
+    if: always()
+    needs: [abi-check, lint, test, build, integration-localnet, integration-devnet, integration-testnet]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Check job results
+        env:
+          RESULTS: ${{ toJSON(needs.*.result) }}
+        run: |
+          echo "$RESULTS"
+          if echo "$RESULTS" | grep -Eq '"(failure|cancelled)"'; then
+            echo "A required job failed or was cancelled."
+            exit 1
+          fi

@@ -18,6 +18,9 @@ Usage::
     w3.eth.send_raw_transaction(signed_tx.encode())
 """
 
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _metadata_version
+
 from .contracts.account_keychain import AccountKeychain
 from .contracts.addresses import ACCOUNT_KEYCHAIN_ADDRESS
 from .keychain import (
@@ -66,7 +69,10 @@ from .types import (
     validate_nonempty_address,
 )
 
-__version__ = "0.3.1"
+try:
+    __version__ = _metadata_version("pytempo")
+except PackageNotFoundError:  # pragma: no cover - running from a source tree
+    __version__ = "0.0.0"
 
 __all__ = [
     # Types
