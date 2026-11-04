@@ -5,19 +5,19 @@
 Install with pip:
 
 ```bash
-pip install pytempo
+pip install "pytempo[web3]"
 ```
 
 Or with [uv](https://docs.astral.sh/uv/):
 
 ```bash
-uv add pytempo
+uv add "pytempo[web3]"
 ```
 
 ## Requirements
 
 - Python 3.10+
-- web3.py 7.0+
+- web3.py 7.0+ for the web3 examples (installed by the `web3` extra; the core transaction and signing APIs need only `eth-account`)
 
 ## Your first transaction
 

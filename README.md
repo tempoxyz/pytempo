@@ -20,13 +20,13 @@ Web3.py extension for Tempo.
 ## Installation
 
 ```bash
-pip install pytempo
+pip install "pytempo[web3]"
 ```
 
 Or with uv:
 
 ```bash
-uv add pytempo
+uv add "pytempo[web3]"
 ```
 
 ## Quick Start
