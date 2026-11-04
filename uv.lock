@@ -1772,7 +1772,7 @@ docs = [
 requires-dist = [
     { name = "attrs", specifier = ">=23.0.0" },
     { name = "eth-abi", specifier = ">=5.0.0" },
-    { name = "eth-account", specifier = ">=0.11.0" },
+    { name = "eth-account", specifier = ">=0.13.1" },
     { name = "eth-utils", specifier = ">=4.0.0" },
     { name = "pycryptodome", specifier = ">=3.20" },
     { name = "rlp", specifier = ">=4.0.0" },
