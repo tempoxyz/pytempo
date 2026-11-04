@@ -127,7 +127,10 @@ jobs:
       - name: Install dependencies
         run: |
           if [ "${{ matrix.resolution }}" = "lowest-direct" ]; then
-            uv sync --all-extras --dev --resolution lowest-direct
+            # The secure runner's package proxy blocks releases published in
+            # the last week, so resolve transitive dependencies as of 14 days ago.
+            uv sync --all-extras --dev --resolution lowest-direct \
+              --exclude-newer "$(date -u -d '14 days ago' +%Y-%m-%dT%H:%M:%SZ)"
           else
             uv sync --all-extras --dev
           fi
@@ -164,8 +167,11 @@ jobs:
       # the way `pip install pytempo` does, and use the offline API.
       - name: Smoke test the wheel without web3
         run: |
+          # Runtime dependencies come pinned from uv.lock (no extras, no dev
+          # group), so the install never pulls web3 or unvetted releases.
+          uv export --frozen --no-dev --no-emit-project --no-hashes -o /tmp/runtime.txt
           uv venv --python 3.12 /tmp/smoke
-          uv pip install --python /tmp/smoke/bin/python dist/*.whl
+          uv pip install --python /tmp/smoke/bin/python -r /tmp/runtime.txt dist/*.whl
           /tmp/smoke/bin/python - <<'PY'
           import importlib.metadata
           import importlib.util
@@ -233,7 +239,7 @@ jobs:
       - name: Wait for Tempo node
         run: |
           echo "Waiting for Tempo node to answer JSON-RPC..."
-          for i in {1..60}; do
+          for _ in {1..60}; do
             if curl -sf -X POST -H 'Content-Type: application/json' \
               --data '{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}' \
               http://localhost:8545 | grep -q '"result"'; then
@@ -330,8 +336,12 @@ jobs:
     needs: [abi-check, lint, test, build, integration-localnet, integration-devnet, integration-testnet]
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    permissions: {}
+    permissions:
+      contents: read
+      id-token: write
     steps:
+      - name: Secure runner
+        uses: tempoxyz/gh-actions/actions/secure-runner@35019557465e3c38ee3468be171771fd73577584 # 2026-10-20T06-22-38Z-35019557
       - name: Check job results
         env:
           RESULTS: ${{ toJSON(needs.*.result) }}
