@@ -136,7 +136,9 @@ jobs:
           fi
 
       - name: Run tests
-        run: uv run pytest -v --durations=10 tests/
+        # --no-sync keeps the environment installed above; a plain `uv run`
+        # would re-resolve the lowest-deps entry back to the newest versions.
+        run: uv run --no-sync pytest -v --durations=10 tests/
 
   build:
     name: Build package
