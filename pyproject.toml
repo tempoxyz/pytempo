@@ -5,7 +5,7 @@ description = "Web3.py extension for Tempo blockchain - adds support for AA tran
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "web3>=7.0.0",
+    "eth-abi>=5.0.0",
     "eth-account>=0.11.0",
     "eth-utils>=4.0.0",
     "rlp>=4.0.0",
@@ -20,6 +20,9 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "License :: OSI Approved :: Apache Software License",
 ]
+
+[project.optional-dependencies]
+web3 = ["web3>=7.0.0"]
 
 [project.urls]
 Homepage = "https://github.com/tempoxyz/pytempo"
@@ -62,6 +65,7 @@ filterwarnings = [
 
 [dependency-groups]
 dev = [
+    "web3>=7.0.0",
     "pytest>=8.4.2",
     "ruff>=0.14.6",
 ]

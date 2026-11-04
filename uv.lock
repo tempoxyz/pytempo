@@ -1733,14 +1733,19 @@ wheels = [
 
 [[package]]
 name = "pytempo"
-version = "0.6.2"
+version = "0.7.0"
 source = { editable = "." }
 dependencies = [
     { name = "attrs" },
+    { name = "eth-abi" },
     { name = "eth-account" },
     { name = "eth-utils" },
     { name = "pycryptodome" },
     { name = "rlp" },
+]
+
+[package.optional-dependencies]
+web3 = [
     { name = "web3" },
 ]
 
@@ -1748,6 +1753,7 @@ dependencies = [
 dev = [
     { name = "pytest" },
     { name = "ruff" },
+    { name = "web3" },
 ]
 docs = [
     { name = "furo" },
@@ -1765,17 +1771,20 @@ docs = [
 [package.metadata]
 requires-dist = [
     { name = "attrs", specifier = ">=23.0.0" },
+    { name = "eth-abi", specifier = ">=5.0.0" },
     { name = "eth-account", specifier = ">=0.11.0" },
     { name = "eth-utils", specifier = ">=4.0.0" },
     { name = "pycryptodome", specifier = ">=3.20" },
     { name = "rlp", specifier = ">=4.0.0" },
-    { name = "web3", specifier = ">=7.0.0" },
+    { name = "web3", marker = "extra == 'web3'", specifier = ">=7.0.0" },
 ]
+provides-extras = ["web3"]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "pytest", specifier = ">=8.4.2" },
     { name = "ruff", specifier = ">=0.14.6" },
+    { name = "web3", specifier = ">=7.0.0" },
 ]
 docs = [
     { name = "furo", specifier = ">=2024.0" },
