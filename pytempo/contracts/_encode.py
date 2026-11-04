@@ -1,30 +1,68 @@
-"""Internal helper for ABI-encoding calldata from shipped ABI definitions."""
+"""Internal helper for ABI-encoding calldata from shipped ABI definitions.
 
-from eth_utils import is_hex_address, to_checksum_address
-from web3 import Web3
+Encodes with ``eth_abi`` directly so the core package does not need web3.
+"""
 
-# Offline Web3 instance — no provider needed, just ABI encoding.
-_w3 = Web3()
+from __future__ import annotations
 
-# Cache contract objects per ABI (keyed by id of the ABI list).
-# We store a reference to the ABI list to prevent GC from reusing its id.
-_contract_cache: dict[int, tuple[list, object]] = {}
+from eth_abi import encode as abi_encode
+from eth_utils import is_hex_address, keccak, to_bytes, to_checksum_address
 
 
-def _get_contract(abi: list):
-    key = id(abi)
-    if key not in _contract_cache:
-        _contract_cache[key] = (abi, _w3.eth.contract(abi=abi))
-    return _contract_cache[key][1]
+def _collapse_type(param: dict) -> str:
+    """Return the canonical ABI type string, expanding tuples to ``(a,b)``."""
+    typ = param["type"]
+    if not typ.startswith("tuple"):
+        return typ
+    inner = ",".join(_collapse_type(c) for c in param["components"])
+    return f"({inner}){typ[len('tuple') :]}"
 
 
-def _normalize_arg(value: object) -> object:
-    """Auto-checksum bare hex addresses so callers don't have to."""
-    if isinstance(value, str) and is_hex_address(value):
-        return to_checksum_address(value)
-    if isinstance(value, (list, tuple)):
-        return type(value)(_normalize_arg(v) for v in value)
+def _normalize(param: dict, value: object) -> object:
+    """Coerce a Python value into what ``eth_abi`` expects for ``param``.
+
+    Bare hex addresses are checksummed and hex strings for ``bytes``/``bytesN``
+    are decoded, as web3's ``encode_abi`` accepted them.
+    """
+    typ = param["type"]
+    if typ.endswith("]"):
+        elem = dict(param, type=typ[: typ.rindex("[")])
+        return [_normalize(elem, v) for v in value]  # type: ignore[union-attr]
+    if typ == "tuple":
+        components = param["components"]
+        if isinstance(value, dict):
+            value = [value[c["name"]] for c in components]
+        return tuple(
+            _normalize(c, v)
+            for c, v in zip(components, value, strict=True)  # type: ignore[call-overload]
+        )
+    if typ == "address":
+        if isinstance(value, str) and is_hex_address(value):
+            return to_checksum_address(value)
+        if isinstance(value, (bytes, bytearray)) and len(value) == 20:
+            return to_checksum_address(value)
+        return value
+    if typ.startswith("bytes") and isinstance(value, str):
+        return to_bytes(hexstr=value)
     return value
+
+
+def _find_function(abi: list, fn_name: str, args: list) -> dict:
+    """Pick the ABI entry for ``fn_name``, resolving overloads by arity."""
+    candidates = [
+        e
+        for e in abi
+        if e.get("type") == "function"
+        and e.get("name") == fn_name
+        and len(e.get("inputs", [])) == len(args)
+    ]
+    if not candidates:
+        raise ValueError(
+            f"No function {fn_name!r} with {len(args)} argument(s) in the ABI"
+        )
+    if len(candidates) > 1:
+        raise ValueError(f"Ambiguous function {fn_name!r} with {len(args)} arguments")
+    return candidates[0]
 
 
 def encode_calldata(abi: list, fn_name: str, args: list) -> str:
@@ -38,6 +76,9 @@ def encode_calldata(abi: list, fn_name: str, args: list) -> str:
     Returns:
         Hex-encoded calldata string (with ``0x`` prefix).
     """
-    contract = _get_contract(abi)
-    normalized = [_normalize_arg(a) for a in args]
-    return contract.encode_abi(fn_name, args=normalized)
+    fn = _find_function(abi, fn_name, args)
+    inputs = fn.get("inputs", [])
+    types = [_collapse_type(p) for p in inputs]
+    selector = keccak(text=f"{fn_name}({','.join(types)})")[:4]
+    normalized = [_normalize(p, a) for p, a in zip(inputs, args, strict=True)]
+    return "0x" + (selector + abi_encode(types, normalized)).hex()
