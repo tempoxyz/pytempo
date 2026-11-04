@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.0 (2026-11-04)
+
+### Minor Changes
+
+- Made web3.py an optional dependency, installed with the `web3` extra (`pip install "pytempo[web3]"`). Calldata encoding now uses eth-abi directly, so building, signing and encoding transactions no longer installs web3.py and its HTTP and websocket stack. (by @brendanjryan, [#137](https://github.com/tempoxyz/pytempo/pull/137))
+
+### Patch Changes
+
+- Fixed `pytempo.__version__`, which reported 0.3.1 regardless of the installed release; it now reads the installed package's version. (by @brendanjryan, [#139](https://github.com/tempoxyz/pytempo/pull/139))
+
 ## 0.7.0 (2026-10-31)
 
 ### Minor Changes
