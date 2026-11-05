@@ -1,7 +1,7 @@
 """Tests for the strongly-typed models."""
 
 import pytest
-from eth_utils import keccak
+from eth_utils import keccak, to_checksum_address
 
 from pytempo import (
     AccessListItem,
@@ -170,6 +170,48 @@ class TestTempoTransaction:
         )
         with pytest.raises(ValueError, match="cannot exceed"):
             tx.validate()
+
+    def test_estimate_gas_request_single_call(self):
+        tx = TempoTransaction(
+            chain_id=1,
+            gas_limit=21000,
+            calls=(Call.create(to="0x" + "a" * 40, value=5, data="0x1234"),),
+        )
+        request = tx.to_estimate_gas_request(sender="0x" + "b" * 40)
+        assert request == {
+            "from": "0x" + "b" * 40,
+            "data": "0x1234",
+            "to": to_checksum_address("0x" + "a" * 40),
+            "value": "0x5",
+        }
+
+    def test_estimate_gas_request_includes_every_call_in_a_batch(self):
+        tx = TempoTransaction(
+            chain_id=1,
+            gas_limit=21000,
+            calls=(
+                Call.create(to="0x" + "a" * 40, value=5, data="0x1234"),
+                Call.create(to="0x" + "c" * 40),
+                Call.create(to=b"", data="0x6000"),
+            ),
+        )
+        request = tx.to_estimate_gas_request(sender="0x" + "b" * 40)
+        assert request == {
+            "from": "0x" + "b" * 40,
+            "calls": [
+                {
+                    "to": to_checksum_address("0x" + "a" * 40),
+                    "value": "0x5",
+                    "data": "0x1234",
+                },
+                {
+                    "to": to_checksum_address("0x" + "c" * 40),
+                    "value": "0x0",
+                    "data": "0x",
+                },
+                {"to": None, "value": "0x0", "data": "0x6000"},
+            ],
+        }
 
     def test_sign_returns_new_transaction(self):
         tx = TempoTransaction(
