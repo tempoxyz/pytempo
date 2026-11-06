@@ -29,6 +29,7 @@ fully_signed = signed_by_sender.sign("0xFeePayerPrivateKey...", for_fee_payer=Tr
 
 # Step 3: Send
 from web3 import Web3
+
 w3 = Web3(Web3.HTTPProvider("https://rpc.testnet.tempo.xyz"))
 tx_hash = w3.eth.send_raw_transaction(fully_signed.encode())
 ```
