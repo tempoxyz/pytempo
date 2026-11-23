@@ -15,7 +15,67 @@
 
 # pytempo
 
-Web3.py extension for Tempo.
+pytempo is the Python SDK for [Tempo](https://tempo.com), a blockchain built for stablecoin payments. It extends [web3.py](https://web3py.readthedocs.io/) to build, sign and send Tempo transactions: TIP-20 stablecoin transfers, batched calls, fees paid in stablecoins, fee sponsorship and access keys.
+
+## Send a stablecoin payment
+
+```bash
+pip install "pytempo[web3]"
+```
+
+This script sends 1 AlphaUSD, a TIP-20 test stablecoin, on Moderato testnet (RPC `https://rpc.moderato.tempo.xyz`, chain ID `42431`). It funds the sender from the testnet faucet first, so any new key works:
+
+```python
+import os
+
+from pytempo import TempoTransaction
+from pytempo.contracts import ALPHA_USD, TIP20
+from web3 import Web3
+
+# Moderato testnet, chain ID 42431. Mainnet: https://rpc.tempo.xyz, chain ID 4217.
+w3 = Web3(Web3.HTTPProvider("https://rpc.moderato.tempo.xyz"))
+private_key = os.environ["PRIVATE_KEY"]  # 0x-prefixed key of a test account
+account = w3.eth.account.from_key(private_key)
+recipient = w3.eth.account.create().address  # replace with your recipient's address
+alpha_usd = TIP20(ALPHA_USD)  # AlphaUSD, a TIP-20 test stablecoin with 6 decimals
+
+# Testnet only: fund the account with test stablecoins from the faucet.
+funding = w3.provider.make_request("tempo_fundAddress", [account.address])
+for funding_tx in funding["result"]:
+    w3.eth.wait_for_transaction_receipt(funding_tx)
+
+transfer = alpha_usd.transfer(to=recipient, amount=1_000_000)  # 1.00 AlphaUSD
+
+# Estimate gas: an account's first transaction also pays to create the account.
+draft = TempoTransaction.create(calls=(transfer,))
+gas_limit = w3.eth.estimate_gas(draft.to_estimate_gas_request(account.address))
+
+# Tempo has no native gas token: fees are paid in a USD stablecoin (fee_token).
+tx = TempoTransaction.create(
+    chain_id=42431,
+    gas_limit=gas_limit,
+    max_fee_per_gas=w3.eth.gas_price * 2,
+    max_priority_fee_per_gas=w3.eth.gas_price,
+    nonce=w3.eth.get_transaction_count(account.address),
+    fee_token=ALPHA_USD,
+    calls=(transfer,),
+)
+tx_hash = w3.eth.send_raw_transaction(tx.sign(private_key).encode())
+receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+
+balance = alpha_usd.balance_of(w3, account=recipient)
+print(f"https://explore.testnet.tempo.xyz/tx/0x{tx_hash.hex()} status={receipt.status}")
+print(f"Recipient balance: {balance / 1e6} AlphaUSD")
+```
+
+Run it with a new test key:
+
+```bash
+export PRIVATE_KEY=$(python -c "from eth_account import Account; print(Account.create().key.to_0x_hex())")
+python send_payment.py
+```
+
+On mainnet, use `https://rpc.tempo.xyz` and chain ID `4217`, drop the faucet call, and pay fees in a stablecoin the account holds. See the [Python SDK docs](https://tempo.com/developers/docs/sdk/python) and [network details](https://tempo.com/developers/docs/quickstart/connection-details).
 
 ## Installation
 
@@ -42,12 +102,12 @@ from pytempo import TempoTransaction
 from pytempo.contracts import TIP20, StablecoinDEX, ALPHA_USD, BETA_USD
 from web3 import Web3
 
-w3 = Web3(Web3.HTTPProvider("https://rpc.testnet.tempo.xyz"))
+w3 = Web3(Web3.HTTPProvider("https://rpc.moderato.tempo.xyz"))
 
 # Create a strongly-typed immutable transaction
 # No patching needed - we handle encoding ourselves
 tx = TempoTransaction.create(
-    chain_id=42429,
+    chain_id=42431,
     gas_limit=100_000,
     max_fee_per_gas=2_000_000_000,
     max_priority_fee_per_gas=1_000_000_000,
@@ -71,10 +131,10 @@ For arbitrary contract calls or simple transfers, use `Call.create()` directly:
 from pytempo import TempoTransaction, Call
 from web3 import Web3
 
-w3 = Web3(Web3.HTTPProvider("https://rpc.testnet.tempo.xyz"))
+w3 = Web3(Web3.HTTPProvider("https://rpc.moderato.tempo.xyz"))
 
 tx = TempoTransaction.create(
-    chain_id=42429,
+    chain_id=42431,
     gas_limit=100_000,
     max_fee_per_gas=2_000_000_000,
     max_priority_fee_per_gas=1_000_000_000,
@@ -91,7 +151,7 @@ tx_hash = w3.eth.send_raw_transaction(signed_tx.encode())
 from pytempo.contracts import BETA_USD
 
 tx = TempoTransaction.create(
-    chain_id=42429,
+    chain_id=42431,
     gas_limit=100_000,
     max_fee_per_gas=2_000_000_000,
     fee_token=BETA_USD,
@@ -106,7 +166,7 @@ from pytempo import TempoTransaction, Call
 
 # User creates and signs a sponsored transaction
 tx = TempoTransaction.create(
-    chain_id=42429,
+    chain_id=42431,
     gas_limit=100_000,
     max_fee_per_gas=2_000_000_000,
     awaiting_fee_payer=True,
@@ -126,7 +186,7 @@ w3.eth.send_raw_transaction(final_tx.encode())
 from pytempo import TempoTransaction, Call
 
 tx = TempoTransaction.create(
-    chain_id=42429,
+    chain_id=42431,
     gas_limit=200_000,
     max_fee_per_gas=2_000_000_000,
     calls=(
@@ -144,7 +204,7 @@ from pytempo import TempoTransaction, Call
 
 # Use different nonce keys for parallel execution
 tx1 = TempoTransaction.create(
-    chain_id=42429,
+    chain_id=42431,
     gas_limit=100_000,
     nonce=0,
     nonce_key=1,  # First parallel key
@@ -152,7 +212,7 @@ tx1 = TempoTransaction.create(
 )
 
 tx2 = TempoTransaction.create(
-    chain_id=42429,
+    chain_id=42431,
     gas_limit=100_000,
     nonce=0,
     nonce_key=2,  # Second parallel key
@@ -168,7 +228,7 @@ tx2 = TempoTransaction.create(
 from pytempo import TempoTransaction, Call
 
 tx = TempoTransaction.create(
-    chain_id=42429,
+    chain_id=42431,
     gas_limit=500_000,
     calls=(Call.create(to=b"", data="0x6080604052..."),),  # Empty 'to' for creation
 )
@@ -182,7 +242,7 @@ from pytempo import TempoTransaction
 
 # Supports both camelCase and snake_case keys
 tx = TempoTransaction.from_dict({
-    "chainId": 42429,
+    "chainId": 42431,
     "gas": 100_000,
     "maxFeePerGas": 2_000_000_000,
     "to": "0xRecipient...",
@@ -295,7 +355,7 @@ balance = StorageCredits.balance_of(w3, account="0xYourAddress...")
 # NOTE: mode/budget are transaction-local (reset every tx) and must come
 # BEFORE the storage-creating calls they affect.
 tx = TempoTransaction.create(
-    chain_id=42429,
+    chain_id=42431,
     gas_limit=200_000,
     max_fee_per_gas=2_000_000_000,
     calls=(

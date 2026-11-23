@@ -1,7 +1,7 @@
 [project]
 name = "pytempo"
 version = "0.7.0"
-description = "Web3.py extension for Tempo blockchain - adds support for AA transactions and Tempo-specific features"
+description = "Python SDK for Tempo, the stablecoin payments blockchain: build, sign and send Tempo transactions and TIP-20 stablecoin payments with web3.py"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -20,13 +20,29 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "License :: OSI Approved :: Apache Software License",
 ]
+keywords = [
+    "tempo",
+    "web3",
+    "web3py",
+    "ethereum",
+    "evm",
+    "blockchain",
+    "stablecoin",
+    "payments",
+    "stablecoin-payments",
+    "tip-20",
+    "sdk",
+]
 
 [project.optional-dependencies]
 web3 = ["web3>=7.0.0"]
 
 [project.urls]
-Homepage = "https://github.com/tempoxyz/pytempo"
-Documentation = "https://github.com/tempoxyz/pytempo#readme"
+Homepage = "https://tempo.com"
+Documentation = "https://tempo.com/developers/docs/sdk/python"
+Repository = "https://github.com/tempoxyz/pytempo"
+Issues = "https://github.com/tempoxyz/pytempo/issues"
+Changelog = "https://github.com/tempoxyz/pytempo/blob/main/CHANGELOG.md"
 
 [build-system]
 requires = ["hatchling"]
