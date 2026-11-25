@@ -332,6 +332,17 @@ class TestTempoTransaction:
         with pytest.raises(ValueError, match="valid_after cannot be greater"):
             tx.validate()
 
+    def test_validate_rejects_zero_valid_before(self):
+        # 0 would RLP-encode as absent, so the signed tx would never expire.
+        tx = TempoTransaction.create(
+            chain_id=42429,
+            gas_limit=100000,
+            valid_before=0,
+            calls=(Call.create(to="0x" + "a" * 40),),
+        )
+        with pytest.raises(ValueError, match="valid_before must be >= 1"):
+            tx.validate()
+
     def test_create_with_fee_token(self):
         tx = TempoTransaction.create(
             chain_id=42429,
