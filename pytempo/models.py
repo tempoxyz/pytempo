@@ -391,6 +391,11 @@ class TempoTransaction:
             raise ValueError("sender_address is required")
         if self.fee_payer_signature is not None and not self.sender_address:
             raise ValueError("fee_payer_signature requires sender_address")
+        # valid_before 0 would encode as absent (never expires), not as expired.
+        if self.valid_before == 0:
+            raise ValueError(
+                "valid_before must be >= 1 when set (use None for never), got 0"
+            )
         # 0 encodes as absent, so only a window with both ends set must be non-empty.
         if self.valid_before and self.valid_after:
             # tempo-primitives requires valid_before > valid_after (strictly).
