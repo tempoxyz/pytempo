@@ -298,3 +298,62 @@ def test_dex_storage_credits_rejects_overflow():
 
     with pytest.raises(ValueError, match="uint64"):
         StablecoinDEX.storage_credits(mock_w3, user=RECIPIENT)
+
+
+def test_dex_quote_swap_exact_amount_in_decodes_and_encodes_selector():
+    mock_w3 = MagicMock()
+    mock_w3.eth.call.return_value = (990_000).to_bytes(32, "big")
+
+    assert (
+        StablecoinDEX.quote_swap_exact_amount_in(
+            mock_w3, token_in=ALPHA_USD, token_out=BETA_USD, amount_in=1_000_000
+        )
+        == 990_000
+    )
+
+    tx = mock_w3.eth.call.call_args.args[0]
+    assert tx["to"] == STABLECOIN_DEX_ADDRESS
+    assert bytes.fromhex(tx["data"][2:10]) == _selector(
+        "quoteSwapExactAmountIn(address,address,uint128)"
+    )
+
+
+def test_dex_quote_swap_exact_amount_out_decodes_and_encodes_selector():
+    mock_w3 = MagicMock()
+    mock_w3.eth.call.return_value = (1_010_000).to_bytes(32, "big")
+
+    assert (
+        StablecoinDEX.quote_swap_exact_amount_out(
+            mock_w3, token_in=ALPHA_USD, token_out=BETA_USD, amount_out=1_000_000
+        )
+        == 1_010_000
+    )
+
+    tx = mock_w3.eth.call.call_args.args[0]
+    assert tx["to"] == STABLECOIN_DEX_ADDRESS
+    assert bytes.fromhex(tx["data"][2:10]) == _selector(
+        "quoteSwapExactAmountOut(address,address,uint128)"
+    )
+
+
+def test_dex_tick_to_price_decodes_and_encodes_selector():
+    mock_w3 = MagicMock()
+    mock_w3.eth.call.return_value = (100_050).to_bytes(32, "big")
+
+    assert StablecoinDEX.tick_to_price(mock_w3, tick=50) == 100_050
+
+    tx = mock_w3.eth.call.call_args.args[0]
+    assert tx["to"] == STABLECOIN_DEX_ADDRESS
+    assert bytes.fromhex(tx["data"][2:10]) == _selector("tickToPrice(int16)")
+
+
+def test_dex_price_to_tick_decodes_signed_tick():
+    mock_w3 = MagicMock()
+    # priceToTick returns a signed int16; a negative tick is sign-extended.
+    mock_w3.eth.call.return_value = (-25).to_bytes(32, "big", signed=True)
+
+    assert StablecoinDEX.price_to_tick(mock_w3, price=99_975) == -25
+
+    tx = mock_w3.eth.call.call_args.args[0]
+    assert tx["to"] == STABLECOIN_DEX_ADDRESS
+    assert bytes.fromhex(tx["data"][2:10]) == _selector("priceToTick(uint32)")
