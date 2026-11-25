@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.8.0 (2026-11-25)
+
+### Minor Changes
+
+- Made web3.py an optional dependency, installed with the `web3` extra (`pip install "pytempo[web3]"`). Calldata encoding now uses eth-abi directly, so building, signing and encoding transactions no longer installs web3.py and its HTTP and websocket stack. (by @brendanjryan, [#137](https://github.com/tempoxyz/pytempo/pull/137))
+
+### Patch Changes
+
+- Opened the README with a runnable TIP-20 stablecoin payment on Moderato testnet, fixed the README's testnet chain ID (42431) and RPC URL, and added package keywords and Tempo documentation links to the project metadata. (by Varun Srinivasan, [#142](https://github.com/tempoxyz/pytempo/pull/142))
+- Fixed `TempoTransaction.validate()` to reject `valid_before=0`, which encoded as no expiry and produced a transaction that never expires. (by Matthias Seitz, [#143](https://github.com/tempoxyz/pytempo/pull/143))
+- Fixed `pytempo.__version__`, which reported 0.3.1 regardless of the installed release; it now reads the installed package's version. (by @brendanjryan, [#139](https://github.com/tempoxyz/pytempo/pull/139))
+
 ## 0.7.0 (2026-10-31)
 
 ### Minor Changes
